@@ -53,3 +53,10 @@ dkms.conf
 
 # MacOS files
 .DS_Store
+*.json
+/LED20_Code/.devcontainer
+.DS_Store
+.DS_Store
+/LED20_Code/components
+LED20_Code/CMakeLists.txt
+LED20_Code/main/CMakeLists.txt
