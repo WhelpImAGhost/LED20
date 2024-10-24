@@ -60,3 +60,5 @@ dkms.conf
 /LED20_Code/components
 LED20_Code/CMakeLists.txt
 LED20_Code/main/CMakeLists.txt
+/LED20_Code/build/esp-idf
+/LED20_Code/build
