@@ -1,3 +1,19 @@
+/* LED20
+ * @author: ECE 411 Team 01
+ * 
+ * 
+ * This program connects a Seeed Studio ESP32-C6 to
+ * a LSM6DSO32 Accelerometer/Gyroscope IC. The end goal
+ * is to create a D20 or 20-sided die that illuminates 
+ * the top-most side after being rolled. If a 1 or a 20
+ * are rolled, the die then plays a specialized animation 
+ * on the LEDs and a sound or melody on the piezo speaker.
+ * 
+ * 
+ * 
+*/
+
+
 #include <stdio.h>
 #include <unistd.h>
 #include "driver/i2c_master.h"
@@ -38,37 +54,62 @@
 #define BLINK_GPIO 1
 #define BLINK_INTERVAL_USEC 500000
 
-// static uint8_t s_led_state = 0;
+static const char* TAG = "LED20";
+static uint8_t s_led_state = 0;
 
 
 void app_main(void)
 {
     esp_err_t spi_error;
 
-    spi_bus_config_t spi_bus_cfg = {
-        .miso_io_num = PIN_MISO,    // Set up IO pins 
+    spi_bus_config_t spi_bus_cfg = {        // configure SPI bus properties and pins
+
+        .miso_io_num = PIN_MISO,            // Set up IO pins 
         .mosi_io_num = PIN_MOSI,
         .sclk_io_num = PIN_SCK,
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
     };
-    spi_device_handle_t accel;
+
+    spi_device_handle_t accel;              // Set up accel/gyro device 
     spi_device_interface_config_t accel_config = {
 
         .clock_speed_hz = 5 * 1000 * 1000,  // Set clock speed (Hz)
         .spics_io_num = PIN_CS,             // Set CS pin
         .mode = 3,                          // According to datasheet page 30
-        .queue_size = 4                     // Queue, for, something?
+        .queue_size = 4,                    // Max number of queued transactions
 
 
     };
+
+    spi_transaction_t trans = {
+
+        .flags = SPI_TRANS_USE_RXDATA | SPI_TRANS_USE_TXDATA,           // Enable send and recieve data
+        .cmd = 0x8F,                                                     // Set Read mode
+        .addr = 0,
+        .length = 8,                                                   // Length of data in / out
+        .rxlength = 8,                                                 // Length of data out
+        .tx_buffer = NULL,
+        .rx_buffer = NULL,
+
+
+    };
+
     spi_error = spi_bus_initialize(SPI_HOST, &spi_bus_cfg, SPI_DMA_CH_AUTO);
-    ESP_ERROR_CHECK_WITHOUT_ABORT(spi_error);
-    spi_error = spi_bus_add_device(SPI_HOST, &accel_config, &accel);
-    ESP_ERROR_CHECK_WITHOUT_ABORT(spi_error);
+    ESP_ERROR_CHECK(spi_error);
+    //spi_error = spi_bus_add_device(SPI_HOST, &accel_config, &accel);
+    spi_error = spi_bus_add_device(SPI2_HOST, &accel_config ,&accel );
+    ESP_ERROR_CHECK(spi_error);
 
+    ESP_LOGI(TAG,"SPI was set up with no errors");
+    ESP_LOGI(TAG,"Attempting transfer");
 
-    /*
+    spi_error = spi_device_transmit(accel, &trans);
+    ESP_ERROR_CHECK(spi_error);
+
+    uint8_t whoami = trans.rx_data[0];
+    ESP_LOGI(TAG, "Gathered data was: 0x%02X", whoami );
+    
     gpio_set_direction(BLINK_GPIO, GPIO_MODE_OUTPUT);  // Set pin to OUTPUT mode
     while(1){
 
@@ -78,5 +119,5 @@ void app_main(void)
 
 
     }
-    */
+    
 }
