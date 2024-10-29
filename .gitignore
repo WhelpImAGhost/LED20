@@ -56,6 +56,3 @@ dkms.conf
 /LED20_Code/.devcontainer
 /LED20_Code/components
 /LED20_Code/build
-LED20_Code/CMakeLists.txt
-LED20_Code/dependencies.lock
-LED20_Code/sdkconfig
