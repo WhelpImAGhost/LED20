@@ -54,4 +54,6 @@ dkms.conf
 
 *.json
 /LED20_Code/*
-!/LED20_Code/main
+!/LED20_Code/main/main.c
+!/LED20_Code/main/CMakeLists.txt
+!/LED20_Code/main/idf_component.yml
