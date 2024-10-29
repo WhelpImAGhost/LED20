@@ -53,6 +53,5 @@ dkms.conf
 
 
 *.json
-/LED20_Code/.devcontainer
-/LED20_Code/components
-/LED20_Code/build
+/LED20_Code/*
+!/LED20_Code/main
