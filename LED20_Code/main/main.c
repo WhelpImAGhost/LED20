@@ -49,10 +49,23 @@
 #define STATIONARY_TIME 1  // Time delay (in seconds) after stationary to determine orientation
 
 
+// SPI bus device setup
+spi_device_handle_t accel;              // Set up accel/gyro device 
+spi_device_interface_config_t accel_config = {
+
+    .clock_speed_hz = 8 * 1000 * 1000,  // Set clock speed (Hz)
+    .spics_io_num = PIN_CS,             // Set CS pin
+    .mode = 3,                          // According to datasheet page 30
+    .queue_size = 12,                    // Max number of queued transactions
+    .command_bits = 8,                  // Specify 8 bits for command (register address)
+    .address_bits = 0,                  // Set address_bits to 0 since only cmd is used for address
+
+};
+
 
 // Testing and debugging
 #define BLINK_GPIO 1
-#define BLINK_INTERVAL_USEC 50000
+#define BLINK_INTERVAL_USEC 5000000
 
 static const char* TAG = "LED20";
 static uint8_t s_led_state = 0;
@@ -60,8 +73,10 @@ static uint8_t s_led_state = 0;
 
 void app_main(void)
 {
+    // Local variable declarations
     esp_err_t spi_error;
 
+    // SPI bus and device setup
     spi_bus_config_t spi_bus_cfg = {        // configure SPI bus properties and pins
 
         .miso_io_num = PIN_MISO,            // Set up IO pins 
@@ -71,48 +86,36 @@ void app_main(void)
         .quadhd_io_num = -1,
     };
 
-    spi_device_handle_t accel;              // Set up accel/gyro device 
-    spi_device_interface_config_t accel_config = {
-
-        .clock_speed_hz = 5 * 1000 * 1000,  // Set clock speed (Hz)
-        .spics_io_num = PIN_CS,             // Set CS pin
-        .mode = 3,                          // According to datasheet page 30
-        .queue_size = 4,                    // Max number of queued transactions
-        .command_bits = 8,                  // Specify 8 bits for command (register address)
-        .address_bits = 0,                  // Set address_bits to 0 since only cmd is used for address
 
 
-
-    };
-
-    spi_transaction_t trans = {
-
+    // One-off SPI transfer setup
+    spi_transaction_t test = {
         .flags = SPI_TRANS_USE_RXDATA | SPI_TRANS_USE_TXDATA,           // Enable send and recieve data
-        .cmd = 0x8F,                                                     // Set Read mode
-        .addr = 0,
-        .length = 8,                                                   // Length of data in / out
-        .rxlength = 8,                                                 // Length of data out
+        .cmd = 0x8F,                                                    // Set Read mode for WHO_AM_I register
+        .length = 8,                                                    // Length of data in / out
+        .rxlength = 8,                                                  // Length of data out
         .tx_buffer = NULL,
         .rx_buffer = NULL,
-
-
     };
 
     spi_error = spi_bus_initialize(SPI_HOST, &spi_bus_cfg, SPI_DMA_CH_AUTO);
     ESP_ERROR_CHECK(spi_error);
-    //spi_error = spi_bus_add_device(SPI_HOST, &accel_config, &accel);
+
     spi_error = spi_bus_add_device(SPI2_HOST, &accel_config ,&accel );
     ESP_ERROR_CHECK(spi_error);
 
     ESP_LOGI(TAG,"SPI was set up with no errors");
     ESP_LOGI(TAG,"Attempting transfer");
 
-    spi_error = spi_device_transmit(accel, &trans);
+    spi_error = spi_device_transmit(accel, &test);
     ESP_ERROR_CHECK(spi_error);
 
-    uint8_t whoami = trans.rx_data[0];
+    uint8_t whoami = test.rx_data[0];
     ESP_LOGI(TAG, "Gathered data was: 0x%02X", whoami );
     
+
+
+
     gpio_set_direction(BLINK_GPIO, GPIO_MODE_OUTPUT);  // Set pin to OUTPUT mode
     while(1){
 
