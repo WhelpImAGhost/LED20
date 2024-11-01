@@ -22,6 +22,7 @@
 #include "driver/spi_common.h"
 #include "driver/spi_master.h"
 #include "esp_log.h"
+#include "defines.c"
 
 // SPI connection and classifications
 
@@ -44,21 +45,30 @@
 
 
 // Sensor classifications and constants
-#define TILT_TOLERANCE 0.1 // Percent of tilt to regeister a zone
-#define ACCEL_THRESHOLD 0  // Threshold value for assuming the die is stationary
-#define STATIONARY_TIME 1  // Time delay (in seconds) after stationary to determine orientation
+
+#define SPI_CLOCK_SPEED 8           // SPI transfer speed in MHz
+#define GYRO_DPS_MODE 0b10101100    // Sets the Gyroscope resolution and speed
+#define ACCEL_G_MODE 0b10100100     // Sets the Accelerometer resolution and speed
+
+
+#define TILT_TOLERANCE 0.1          // Percent of tilt to regeister a zone
+#define ACCEL_THRESHOLD 0           // Threshold value for assuming the die is stationary
+#define STATIONARY_TIME 1           // Time delay (in seconds) after stationary to determine orientation
+
+
+
 
 
 // SPI bus device setup
 spi_device_handle_t accel;              // Set up accel/gyro device 
 spi_device_interface_config_t accel_config = {
 
-    .clock_speed_hz = 8 * 1000 * 1000,  // Set clock speed (Hz)
-    .spics_io_num = PIN_CS,             // Set CS pin
-    .mode = 3,                          // According to datasheet page 30
-    .queue_size = 12,                    // Max number of queued transactions
-    .command_bits = 8,                  // Specify 8 bits for command (register address)
-    .address_bits = 0,                  // Set address_bits to 0 since only cmd is used for address
+    .clock_speed_hz = SPI_CLOCK_SPEED * 1000 * 1000,    // Set clock speed (Hz)
+    .spics_io_num = PIN_CS,                             // Set CS pin
+    .mode = 3,                                          // According to datasheet page 30
+    .queue_size = 12,                                   // Max number of queued transactions
+    .command_bits = 8,                                  // Specify 8 bits for command (register address)
+    .address_bits = 0,                                  // Set address_bits to 0 since only cmd is used for address
 
 };
 

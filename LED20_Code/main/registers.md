@@ -1,11 +1,30 @@
 # Registers and values required
 
 
-### 
+### Notes on sensor setup
+- Disable I2C in CTRL4_C
+- Set Accelerometer operation mode in register CTRL1_XL (0x10)
+- Set Gyroscope operation mode in register CTRL2_G (0x11)
+- Software Reset, Register Increment, and interrupt activation level set in CTRL3_C (0x12)
 
 
+### Notes on Interrrupt setup
+- Enable "Significant Motion Detection" in register EMB_FUNC_EN_A (04h)
+- SMD interrupt can be routed to INT1 or INT2
 
-
+### Notes on Data Acquisition
+- Data is back into two bytes, stored in Two's Complement format
+- L register is bits 7-0, H register is 15-8
+- Accelerometer data registers:
+    - OUTX_L_A (0x28) and OUTX_H_A (0x29) - X axis linear acceleration
+    - OUTY_L_A (0x2A) and OUTY_H_A (0x2B) - Y axis linear acceleration
+    - OUTZ_L_A (0x2C) and OUTZ_H_A (0x2D) - Z axis linear acceleration
+- Gyroscope data registers:
+    - OUTX_L_G (0x22) and OUTX_H_G (0x23) - X axis angular rate value
+    - OUTY_L_G (0x24) and OUTY_H_G (0x25) - Y axis angular rate value
+    - OUTZ_L_G (0x26) and OUTZ_H_G (0x27) - Z axis angular rate value
+- Temperature data registers:
+    - OUT_TEMP_LOW (0x20) and OUT_TEMP_HIGH (0x21) - Temperature output register
 
 
 # Cheatsheet
