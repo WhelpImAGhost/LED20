@@ -6,11 +6,18 @@
 - Set Accelerometer operation mode in register CTRL1_XL (0x10)
 - Set Gyroscope operation mode in register CTRL2_G (0x11)
 - Software Reset, Register Increment, and interrupt activation level set in CTRL3_C (0x12)
+- Disable I3C using CTRL9_XL
+
 
 
 ### Notes on Interrrupt setup
 - Enable "Significant Motion Detection" in register EMB_FUNC_EN_A (04h)
-- SMD interrupt can be routed to INT1 or INT2
+- SMD interrupt can be routed to INT1 or INT2 
+- Potential for TAP interrupt for sleep state for inactivity instead of SMD
+- Interrupt status cleared by reading interrupt register
+    - For SMD interrupt, read EMB_FUNC_STATUS (12h) page after setting up PAGE_SEL and PAGE_RW
+- TAP has inactivity sensor. Activity interrupt can be used to wake processor from sleep
+
 
 ### Notes on Data Acquisition
 - Data is back into two bytes, stored in Two's Complement format
