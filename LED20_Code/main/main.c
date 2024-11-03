@@ -53,14 +53,9 @@
 
 
 
-#define TILT_TOLERANCE 0.1          // Percent of tilt to regeister a zone
-#define ACCEL_THRESHOLD 0           // Threshold value for assuming the die is stationary
-#define STATIONARY_TIME 1           // Time delay (in seconds) after stationary to determine orientation
-
-
 // Testing and debugging
-#define BLINK_GPIO 1
-#define BLINK_INTERVAL_USEC 5000
+#define BLINK_GPIO 0
+#define BLINK_INTERVAL_USEC 1000000
 
 
 // SPI bus device setup
@@ -83,7 +78,7 @@ static const char* TAG = "LED20";
 static uint8_t s_led_state = 0;
 
 
-esp_err_t w_trans (uint16_t address, uint16_t data ){
+void w_trans (uint16_t address, uint16_t data ){
     
     spi_transaction_t transfer = { 0 };
     //ESP_LOGD(TAG, "Attempting to clear prior transfer");
@@ -98,12 +93,53 @@ esp_err_t w_trans (uint16_t address, uint16_t data ){
     ESP_LOGD(TAG, "Setting data");
     transfer.tx_data[0] = data;
     ESP_LOGD(TAG, "Attempting write at address 0x%02X", address);
-    return spi_device_transmit(accel, &transfer);
+    ESP_ERROR_CHECK( spi_device_transmit(accel, &transfer) );
+    ESP_LOGD(TAG, "Write at address 0x%02X completed", address);
 
+    return;
 
 }
 
-void r_trans(uint16_t address, uint8_t data[2]){
+uint8_t r_int(){
+
+
+    spi_transaction_t transfer = {0};
+    esp_err_t err;
+    transfer.length = 8;
+    transfer.rxlength = 8;
+    transfer.flags = SPI_TRANS_USE_RXDATA;  
+    transfer.cmd = (0x35 | 0x80) ;
+    ESP_LOGD(TAG, "Attempting to read Interrupt Status Register ");
+
+    err = spi_device_transmit(accel, &transfer);
+    ESP_ERROR_CHECK(err);
+
+
+    return transfer.rx_data[0];
+
+
+    
+}
+
+uint8_t r_trans(uint8_t address){
+
+    spi_transaction_t transfer = {0};
+    esp_err_t err;
+    transfer.length = 8;
+    transfer.rxlength = 8;
+    ESP_LOGD(TAG, "Setting flags");
+    transfer.flags = SPI_TRANS_USE_RXDATA;
+    ESP_LOGD(TAG, "Setting address");   
+    transfer.cmd = (address | 0x80) ;
+    ESP_LOGD(TAG, "Attempting read at address 0x%02x", address);
+
+    err = spi_device_transmit(accel, &transfer);
+    ESP_ERROR_CHECK(err);
+    return transfer.rx_data[0];
+
+}
+
+void r2_trans(uint8_t address, int8_t data[2]){
 
     spi_transaction_t transfer = {0};
     esp_err_t err;
@@ -128,7 +164,7 @@ void r_trans(uint16_t address, uint8_t data[2]){
 
 
 
-void starburst ( uint8_t start_address, uint16_t data[12]){     // A function to burst read 12 consecutive data segments
+void starburst ( uint8_t start_address, int8_t data[12]){     // A function to burst read 12 consecutive data segments
 
     spi_transaction_t trans[3];                                 // Set up 3 transactions of 4 bytes
     esp_err_t error;
@@ -145,7 +181,7 @@ void starburst ( uint8_t start_address, uint16_t data[12]){     // A function to
         trans[i].tx_buffer = NULL;
 
         ESP_LOGD(TAG, "Queued transaction at address 0x%02X",   // Queue 4 byte burst
-        start_address + i );
+        start_address + 4*i );
 
         error = spi_device_queue_trans(accel, &trans[i], portMAX_DELAY);
         ESP_ERROR_CHECK(error);
@@ -166,7 +202,7 @@ void starburst ( uint8_t start_address, uint16_t data[12]){     // A function to
         data[4*i+1] = receive->rx_data[1];
         data[4*i+2] = receive->rx_data[2];
         data[4*i+3] = receive->rx_data[3];
-        ESP_LOGD(TAG, "Gathered data from transaction at address 0x%02X", start_address + i);
+        ESP_LOGD(TAG, "Gathered data from transaction at address 0x%02X", start_address + 4*i);
 
 
 
@@ -182,8 +218,8 @@ int app_main(void)
 {
     // Local variable declarations
     esp_err_t spi_error;
-    uint8_t read_data[2];
-    uint16_t read_burst[12];
+    int8_t read_data[2];
+    int8_t read_burst[12];
 
 
     // SPI bus and device setup
@@ -199,17 +235,6 @@ int app_main(void)
 
 
 
-    // One-off SPI transfer setup
-    spi_transaction_t transfer = {
-        .flags = SPI_TRANS_USE_RXDATA | SPI_TRANS_USE_TXDATA,           // Enable send and recieve data
-        .cmd = 0x8F,                                                    // Set Read mode for WHO_AM_I register
-        .length = 8,                                                    // Length of data in / out
-        .rxlength = 8,                                                  // Length of data out
-        .tx_buffer = NULL,
-        .rx_buffer = NULL,
-    };
-
-
     spi_error = spi_bus_initialize(SPI_HOST, &spi_bus_cfg, SPI_DMA_CH_AUTO);
     ESP_ERROR_CHECK(spi_error);
 
@@ -217,32 +242,34 @@ int app_main(void)
     ESP_ERROR_CHECK(spi_error);
 
     ESP_LOGD(TAG,"SPI was set up with no errors");
-    ESP_LOGD(TAG,"Attempting transfer");
-
-    spi_error = spi_device_transmit(accel, &transfer);
-    ESP_ERROR_CHECK(spi_error);
-
-
-    uint8_t whoami = transfer.rx_data[0];
+    
+    uint8_t whoami = r_trans(0x0F);
     if (whoami != 0x6C){
         ESP_LOGE(TAG, "DATA READ FAILURE");
         return -1;
     }
-    ESP_LOGD(TAG, "Gathered data was: 0x%02X", whoami );
     
     
+    // Reset and intialize sensors
+    w_trans(CTRL3_C, 0x1);    // Reset the sensor
+    w_trans(CTRL1_XL, 0xA4);    // Set the speed and rate of the accel
+    w_trans(CTRL2_G, 0xAC);     // Set the speed and rate of the gyro
+    
+    // Set up Significant Motion Detection interrupt on INT1
+    w_trans(FUNC_CFG_ACCESS, 0x80);  // Access embedded functions
+    w_trans(EMB_FUNC_EN_A, 0x20);    // Enable SMD interrupt
+    w_trans(EMB_FUNC_INT1, 0x20);    // Route SMD to INT1
+    w_trans(PAGE_RW, 0x80);          // Latching interrupts enable
+    //w_trans(EMB_FUNC_INIT_A, 0x20);  // Initialize SMD algorithm
+    w_trans(FUNC_CFG_ACCESS, 0x00);  // Return to control registers
+    w_trans(MD1_CFG, 0x02);             // Set INT1_EMB_FUNC in MD1_CFG
 
-    spi_error = w_trans(CTRL3_C, 0b101);
-    ESP_ERROR_CHECK(spi_error);
-    ESP_LOGD(TAG, "Transfer completed");
-
-    spi_error = w_trans(CTRL1_XL, 0xA4);
-    ESP_ERROR_CHECK(spi_error);
-    ESP_LOGD(TAG, "Transfer completed");
-
-    spi_error = w_trans(CTRL2_G, 0xAC);
-    ESP_ERROR_CHECK(spi_error);
-    ESP_LOGD(TAG, "Transfer completed");
+    // Set up Inactivity Detection intterupt on INT2
+    w_trans(WAKEUP_DUR, 0x02);       // Set inactivity time 
+    w_trans(WAKEUP_THS, 0x01);       // Set inactivity threshold
+    w_trans(TAP_CFG0, 0x00);         // Set sleep-change notification
+    w_trans(TAP_CFG2, 0xE0);         // Enable interrupt
+    w_trans(MD2_CFG, 0x80);          // Route interrupt to INT2
 
     gpio_set_direction(BLINK_GPIO, GPIO_MODE_OUTPUT);  // Set pin to OUTPUT mode
 
@@ -252,9 +279,14 @@ int app_main(void)
         gpio_set_level(BLINK_GPIO, s_led_state); // Set LED state based on current LED state
         s_led_state = !s_led_state; // Invert LED state
         starburst( GYRO_X_LOW, read_burst );            // Get 12 bytes of data from accelerometer and gyroscope
-        ESP_LOGD(TAG, "Gyroscope values: X 0x%04X, Y 0x%04X, Z 0x%04X", (read_burst[1]  << 8) | read_burst[0] , (read_burst[3]  << 8) | read_burst[2], (read_burst[5]  << 8) | read_burst[4] );
-        ESP_LOGD(TAG, "Accelerometer values: X 0x%04X, Y 0x%04X, Z 0x%04X", (read_burst[7]  << 8) | read_burst[6] , (read_burst[9]  << 8) | read_burst[8], (read_burst[11]  << 8) | read_burst[10] );
+
+        //ESP_LOGD(TAG,"Interrupt Register status: 0x%02X", r_int());
+        ESP_LOGD(TAG, "Gyroscope values: X %d, Y %d, Z %d", (read_burst[1]  << 8) | read_burst[0] , (read_burst[3]  << 8) | read_burst[2], (read_burst[5]  << 8) | read_burst[4] );
+        ESP_LOGD(TAG, "Accelerometer values: X %d, Y %d, Z %d", (read_burst[7]  << 8) | read_burst[6] , (read_burst[9]  << 8) | read_burst[8], (read_burst[11]  << 8) | read_burst[10] );
         usleep(BLINK_INTERVAL_USEC);
+        
+
+        
 
 
     }

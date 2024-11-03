@@ -11,11 +11,12 @@
 
 
 ### Notes on Interrrupt setup
+- Interrupt Setup is configured by switching to Embedded Function control mode by writing 0x1 to the FUNC_CFG_ACCESS (0x1) register
 - Enable "Significant Motion Detection" in register EMB_FUNC_EN_A (04h)
-- SMD interrupt can be routed to INT1 or INT2 
-- Potential for TAP interrupt for sleep state for inactivity instead of SMD
+- Route SMD interrupt to INT1 and Inactivity to INT2
+
 - Interrupt status cleared by reading interrupt register
-    - For SMD interrupt, read EMB_FUNC_STATUS (12h) page after setting up PAGE_SEL and PAGE_RW
+    - For SMD interrupt, read EMB_FUNC_STATUS_MAINPAGE (0x35) register
 - TAP has inactivity sensor. Activity interrupt can be used to wake processor from sleep
 
 
