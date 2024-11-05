@@ -17,14 +17,20 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include <math.h>
 #include "driver/i2c_master.h"
 #include "driver/gpio.h"
 #include "hal/spi_types.h"
 #include "driver/spi_common.h"
 #include "driver/spi_master.h"
+#include "driver/rmt.h"
+#include "driver/rmt_common.h"
+#include "driver/rmt_tx.h"
+#include "driver/rmt_types.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+
 #include "defines.c"
 
 // SPI connection and classifications
@@ -41,8 +47,8 @@
 
 // LED Connection and classifications
 
-#define LED_NORTH 21 // LED Data Out pin for North Hemisphere
-#define LED_NORTH_CHAIN 10 // Number of LEDs in North Hemisphere
+#define LED_NORTH 16 // LED Data Out pin for North Hemisphere
+#define LED_NORTH_CHAIN 5 // Number of LEDs in North Hemisphere
 #define LED_SOUTH 22 // LED Data Out pin for South Hemisphere
 #define LED_SOUTH_CHAIN 10 // Number of LEDs in South Hemisphere
 
@@ -221,6 +227,37 @@ int app_main(void)
     int8_t read_data[2];
     int8_t read_burst[12];
 
+    uint32_t north_data[24*LED_NORTH_CHAIN];
+    uint32_t south_data[24*LED_SOUTH_CHAIN];
+
+    // LED RMT setup
+    rmt_channel_handle_t rmt_LED_north = NULL;
+    rmt_tx_channel_config_t rmt_north_config = {
+        
+        .clk_src = RMT_CLK_SRC_DEFAULT,
+        .gpio_num = LED_NORTH,
+        .mem_block_symbols = (uint16_t)round( (double)(LED_NORTH_CHAIN * 24) * 64),
+        .resolution_hz = 1 * 1000 * 1000,
+        .trans_queue_depth = 4,
+        .flags.invert_out = false,
+        .flags.with_dma = false,
+
+    };
+    ESP_ERROR_CHECK( rmt_new_tx_channel(&rmt_north_config, &rmt_LED_north));
+
+    rmt_channel_handle_t rmt_LED_south = NULL;
+    rmt_tx_channel_config_t rmt_south_config = {
+        
+        .clk_src = RMT_CLK_SRC_DEFAULT,
+        .gpio_num = LED_SOUTH,
+        .mem_block_symbols = (uint16_t)round( (double)(LED_SOUTH_CHAIN * 24) * 64),
+        .resolution_hz = 1 * 1000 * 1000,
+        .trans_queue_depth = 4,
+        .flags.invert_out = false,
+        .flags.with_dma = false,
+
+    };
+    ESP_ERROR_CHECK( rmt_new_tx_channel(&rmt_south_config, &rmt_LED_south));
 
     // SPI bus and device setup
     spi_bus_config_t spi_bus_cfg = {        // configure SPI bus properties and pins
@@ -244,6 +281,7 @@ int app_main(void)
     ESP_LOGD(TAG,"SPI was set up with no errors");
     
     uint8_t whoami = r_trans(0x0F);
+    ESP_LOGD(TAG, "Value: 0x%02X", whoami);
     if (whoami != 0x6C){
         ESP_LOGE(TAG, "DATA READ FAILURE");
         return -1;
@@ -284,7 +322,7 @@ int app_main(void)
         ESP_LOGD(TAG, "Gyroscope values: X %d, Y %d, Z %d", (read_burst[1]  << 8) | read_burst[0] , (read_burst[3]  << 8) | read_burst[2], (read_burst[5]  << 8) | read_burst[4] );
         ESP_LOGD(TAG, "Accelerometer values: X %d, Y %d, Z %d", (read_burst[7]  << 8) | read_burst[6] , (read_burst[9]  << 8) | read_burst[8], (read_burst[11]  << 8) | read_burst[10] );
         usleep(BLINK_INTERVAL_USEC);
-        
+        break;
 
         
 
