@@ -7,7 +7,7 @@
 	(title_block
 		(title "LED20 Updated Schematic")
 		(date "2024-11-04")
-		(rev "2")
+		(rev "3")
 		(company "Team 01")
 		(comment 1 "Schematic of LED20 prototype")
 	)
@@ -3300,7 +3300,7 @@
 		(uuid 3aedc915-8dcc-4fec-81ce-0ae5256b7748)
 	)
 	(rectangle
-		(start 184.15 21.59)
+		(start 181.61 21.59)
 		(end 229.87 96.52)
 		(stroke
 			(width 0)
@@ -3385,7 +3385,7 @@
 	)
 	(text "LED Arrays"
 		(exclude_from_sim no)
-		(at 191.77 23.876 0)
+		(at 189.23 23.876 0)
 		(effects
 			(font
 				(size 1.778 1.778)
@@ -3526,7 +3526,7 @@
 			)
 		)
 	)
-	(global_label "3.3V Data (D4)"
+	(global_label "3.3V Data (North)"
 		(shape input)
 		(at 203.2 44.45 180)
 		(fields_autoplaced yes)
@@ -3538,7 +3538,7 @@
 		)
 		(uuid "43ee7af9-c552-4b64-a1cc-3e309e0c6179")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 185.7006 44.45 0)
+			(at 183.0397 44.45 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -3570,7 +3570,7 @@
 			)
 		)
 	)
-	(global_label "3.3V Data (D3)"
+	(global_label "3.3V Data (South)"
 		(shape input)
 		(at 203.2 80.01 180)
 		(fields_autoplaced yes)
@@ -3582,7 +3582,7 @@
 		)
 		(uuid "b988ba14-b092-441e-922b-873cd781e872")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 185.7006 80.01 0)
+			(at 182.7979 80.01 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -3887,7 +3887,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "05c02713-4ef1-49e4-9355-55ed0b6084b5")
-		(property "Reference" "TP17"
+		(property "Reference" "TP19"
 			(at 113.538 48.26 90)
 			(effects
 				(font
@@ -3938,7 +3938,7 @@
 		(instances
 			(project "led20_updated_schematic_10_31_24"
 				(path "/967d5e27-871e-4805-83b6-90b8321a7dbd"
-					(reference "TP17")
+					(reference "TP19")
 					(unit 1)
 				)
 			)
@@ -5454,7 +5454,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "858902a4-1b2f-4eae-bc6c-ad74881f3ece")
-		(property "Reference" "TP18"
+		(property "Reference" "TP20"
 			(at 143.51 48.768 0)
 			(effects
 				(font
@@ -5505,7 +5505,7 @@
 		(instances
 			(project "led20_updated_schematic_10_31_24"
 				(path "/967d5e27-871e-4805-83b6-90b8321a7dbd"
-					(reference "TP18")
+					(reference "TP20")
 					(unit 1)
 				)
 			)
@@ -5928,7 +5928,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "addb3813-113f-4c14-8822-98afa48228e1")
-		(property "Reference" "TP19"
+		(property "Reference" "TP21"
 			(at 142.24 103.378 0)
 			(effects
 				(font
@@ -5979,7 +5979,7 @@
 		(instances
 			(project "led20_updated_schematic_10_31_24"
 				(path "/967d5e27-871e-4805-83b6-90b8321a7dbd"
-					(reference "TP19")
+					(reference "TP21")
 					(unit 1)
 				)
 			)
