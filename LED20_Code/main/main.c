@@ -31,6 +31,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+
 #include "defines.c"
 
 // SPI connection and classifications
@@ -47,10 +48,8 @@
 
 // LED Connection and classifications
 
-#define LED_NORTH 16 // LED Data Out pin for North Hemisphere
+#define LED_NORTH 23 // LED Data Out pin for North Hemisphere
 #define LED_NORTH_CHAIN 5 // Number of LEDs in North Hemisphere
-#define LED_SOUTH 22 // LED Data Out pin for South Hemisphere
-#define LED_SOUTH_CHAIN 10 // Number of LEDs in South Hemisphere
 
 
 // Sensor classifications and constants
@@ -82,7 +81,6 @@ spi_device_interface_config_t accel_config = {
 
 static const char* TAG = "LED20";
 static uint8_t s_led_state = 0;
-
 
 void w_trans (uint16_t address, uint16_t data ){
     
@@ -227,37 +225,56 @@ int app_main(void)
     int8_t read_data[2];
     int8_t read_burst[12];
 
-    uint32_t north_data[24*LED_NORTH_CHAIN];
-    uint32_t south_data[24*LED_SOUTH_CHAIN];
+    uint32_t north_data[3*LED_NORTH_CHAIN];
+
+    uint8_t led_data[LED_NORTH_CHAIN * 3] = {
+        0xFF, 0x00, 0x00,  // Red
+        0x00, 0xFF, 0x00,  // Green
+        0x00, 0x00, 0xFF,  // Blue
+        0xFF, 0xFF, 0x00,  // Yellow
+        0x00, 0xFF, 0xFF   // Cyan
+    };
+
+    uint8_t led_off[LED_NORTH_CHAIN * 3] = { 0};
 
     // LED RMT setup
+
     rmt_channel_handle_t rmt_LED_north = NULL;
+
+    if (rmt_LED_north) {
+        rmt_del_channel(rmt_LED_north);
+        rmt_LED_north = NULL;   
+    }   
+
     rmt_tx_channel_config_t rmt_north_config = {
         
         .clk_src = RMT_CLK_SRC_DEFAULT,
         .gpio_num = LED_NORTH,
-        .mem_block_symbols = (uint16_t)round( (double)(LED_NORTH_CHAIN * 24) * 64),
-        .resolution_hz = 1 * 1000 * 1000,
-        .trans_queue_depth = 4,
+        .mem_block_symbols = (LED_NORTH_CHAIN *64 *24),
+        .resolution_hz = 10 * 1000 * 1000,
+        .trans_queue_depth = 1,
         .flags.invert_out = false,
         .flags.with_dma = false,
 
     };
     ESP_ERROR_CHECK( rmt_new_tx_channel(&rmt_north_config, &rmt_LED_north));
+    ESP_ERROR_CHECK (rmt_enable( rmt_LED_north));
 
-    rmt_channel_handle_t rmt_LED_south = NULL;
-    rmt_tx_channel_config_t rmt_south_config = {
-        
-        .clk_src = RMT_CLK_SRC_DEFAULT,
-        .gpio_num = LED_SOUTH,
-        .mem_block_symbols = (uint16_t)round( (double)(LED_SOUTH_CHAIN * 24) * 64),
-        .resolution_hz = 1 * 1000 * 1000,
-        .trans_queue_depth = 4,
-        .flags.invert_out = false,
-        .flags.with_dma = false,
-
+    static rmt_encoder_handle_t bytes_encoder = NULL;
+    rmt_bytes_encoder_config_t bytes_encoder_config = {
+        .bit0 = { .level0 = 1, .duration0 = 4, .level1 = 0, .duration1 = 9 },  // 0 bit: 0.4 µs high, 0.85 µs low
+        .bit1 = { .level0 = 1, .duration0 = 8, .level1 = 0, .duration1 = 5 },  // 1 bit: 0.8 µs high, 0.45 µs low
+        .flags.msb_first = true, // WS2812 protocol sends MSB first
     };
-    ESP_ERROR_CHECK( rmt_new_tx_channel(&rmt_south_config, &rmt_LED_south));
+    ESP_ERROR_CHECK(rmt_new_bytes_encoder(&bytes_encoder_config, &bytes_encoder));
+
+    rmt_transmit_config_t led_tx = {
+        .loop_count = 0  // No looping
+    };
+
+    ESP_ERROR_CHECK(rmt_transmit(rmt_LED_north, bytes_encoder, led_data, LED_NORTH_CHAIN * 3, &led_tx));
+    usleep(BLINK_INTERVAL_USEC);
+    ESP_ERROR_CHECK(rmt_transmit(rmt_LED_north, bytes_encoder, led_off, LED_NORTH_CHAIN * 3, &led_tx));
 
     // SPI bus and device setup
     spi_bus_config_t spi_bus_cfg = {        // configure SPI bus properties and pins
@@ -298,7 +315,6 @@ int app_main(void)
     w_trans(EMB_FUNC_EN_A, 0x20);    // Enable SMD interrupt
     w_trans(EMB_FUNC_INT1, 0x20);    // Route SMD to INT1
     w_trans(PAGE_RW, 0x80);          // Latching interrupts enable
-    //w_trans(EMB_FUNC_INIT_A, 0x20);  // Initialize SMD algorithm
     w_trans(FUNC_CFG_ACCESS, 0x00);  // Return to control registers
     w_trans(MD1_CFG, 0x02);             // Set INT1_EMB_FUNC in MD1_CFG
 
