@@ -23,7 +23,6 @@
 #include "hal/spi_types.h"
 #include "driver/spi_common.h"
 #include "driver/spi_master.h"
-#include "driver/rmt.h"
 #include "driver/rmt_common.h"
 #include "driver/rmt_tx.h"
 #include "driver/rmt_types.h"
@@ -59,8 +58,8 @@
 
 
 // Testing and debugging
-#define BLINK_GPIO 0
-#define BLINK_INTERVAL_USEC 1000000
+#define BLINK_USEC  500000
+static uint8_t s_led_state = 0;
 
 
 // SPI bus device setup
@@ -77,17 +76,38 @@ spi_device_interface_config_t accel_config = {
 };
 
 
+// RMT transfer setup
+rmt_channel_handle_t rmt_LED_north = NULL;
+rmt_tx_channel_config_t rmt_north_config = {
+        
+    .clk_src = RMT_CLK_SRC_DEFAULT,
+    .gpio_num = LED_NORTH,
+    .mem_block_symbols = (128),
+    .resolution_hz = 10 * 1000 * 1000,
+    .trans_queue_depth = 1,
+    .flags.invert_out = false,
+    .flags.with_dma = false,
+};
+
+static rmt_encoder_handle_t bytes_encoder = NULL;
+rmt_bytes_encoder_config_t bytes_encoder_config = {
+    .bit0 = { .level0 = 1, .duration0 = T0H, .level1 = 0, .duration1 = T0L },   // 0 bit: 0.3 µs high, 0.9 µs low
+    .bit1 = { .level0 = 1, .duration0 = T1H, .level1 = 0, .duration1 = T1L },   // 1 bit: 0.6 µs high, 0.6 µs low
+    .flags.msb_first = true, // SK6812MINI typically sends MSB first as well
+};
+
+
+
+
+
 
 
 static const char* TAG = "LED20";
-static uint8_t s_led_state = 0;
+
 
 void w_trans (uint16_t address, uint16_t data ){
     
     spi_transaction_t transfer = { 0 };
-    //ESP_LOGD(TAG, "Attempting to clear prior transfer");
-    //memset(&transfer, 0, sizeof(transfer));
-    //ESP_LOGD(TAG,"Transfer cleared, setting up next one");
     
     transfer.length = 8;
     ESP_LOGD(TAG, "Setting flags");
@@ -217,64 +237,75 @@ void starburst ( uint8_t start_address, int8_t data[12]){     // A function to b
 
 }
 
+void led_w(uint8_t *led_data){
+    
+     ESP_ERROR_CHECK (rmt_enable( rmt_LED_north));
+
+    ESP_LOGD(TAG, "Setting up LED write");
+    rmt_transmit_config_t led_tx = {
+        .loop_count = 0  // No looping
+    };
+    ESP_LOGD(TAG, "Attempting LED write");
+    ESP_ERROR_CHECK(rmt_transmit(rmt_LED_north, bytes_encoder, led_data, LED_NORTH_CHAIN * 3, &led_tx));
+    ESP_ERROR_CHECK(rmt_tx_wait_all_done(rmt_LED_north, portMAX_DELAY));
+
+    ESP_ERROR_CHECK (rmt_disable( rmt_LED_north));
+
+    return;
+}
+
 
 int app_main(void)
 {
     // Local variable declarations
     esp_err_t spi_error;
-    int8_t read_data[2];
+    //int8_t read_temp[2];
     int8_t read_burst[12];
 
-    uint32_t north_data[3*LED_NORTH_CHAIN];
 
-    uint8_t led_data[LED_NORTH_CHAIN * 3] = {
-        0xFF, 0x00, 0x00,  // Red
-        0x00, 0xFF, 0x00,  // Green
-        0x00, 0x00, 0xFF,  // Blue
-        0xFF, 0xFF, 0x00,  // Yellow
-        0x00, 0xFF, 0xFF   // Cyan
+    uint8_t led_one[5 * 3] = {
+    0x00, 0x00, 0x00,  // Green (128), Red (0), Blue (0) - Red
+    0x00, 0x00, 0x00,  // Green (0), Red (128), Blue (0) - Green
+    0x00, 0x00, 0x80,  // Green (0), Red (0), Blue (128) - Blue
+    0x00, 0x00, 0x00,  // Green (128), Red (128), Blue (0) - Yellow
+    0x00, 0x00, 0x00   // Green (128), Red (0), Blue (128) - Cyan
+};
+
+    uint8_t led_rgby[15] = {
+    0x00, 0x80, 0x00,  // Green (128), Red (0), Blue (0) - Red
+    0x80, 0x00, 0x00,  // Green (0), Red (128), Blue (0) - Green
+    0x00, 0x00, 0x80,  // Green (0), Red (0), Blue (128) - Blue
+    0x80, 0x80, 0x00,  // Green (128), Red (128), Blue (0) - Yellow
+    0x00, 0x80, 0x80   // Green (128), Red (0), Blue (128) - Cyan
+
     };
 
-    uint8_t led_off[LED_NORTH_CHAIN * 3] = { 0};
+    uint8_t led_off[LED_NORTH_CHAIN * 3];
+    for (int i = 0; i < LED_NORTH_CHAIN * 3; i++){
+
+        led_off[i]=0;
+    }
 
     // LED RMT setup
 
-    rmt_channel_handle_t rmt_LED_north = NULL;
+   
 
     if (rmt_LED_north) {
         rmt_del_channel(rmt_LED_north);
         rmt_LED_north = NULL;   
     }   
 
-    rmt_tx_channel_config_t rmt_north_config = {
-        
-        .clk_src = RMT_CLK_SRC_DEFAULT,
-        .gpio_num = LED_NORTH,
-        .mem_block_symbols = (LED_NORTH_CHAIN *64 *24),
-        .resolution_hz = 10 * 1000 * 1000,
-        .trans_queue_depth = 1,
-        .flags.invert_out = false,
-        .flags.with_dma = false,
 
-    };
     ESP_ERROR_CHECK( rmt_new_tx_channel(&rmt_north_config, &rmt_LED_north));
-    ESP_ERROR_CHECK (rmt_enable( rmt_LED_north));
+   
 
-    static rmt_encoder_handle_t bytes_encoder = NULL;
-    rmt_bytes_encoder_config_t bytes_encoder_config = {
-        .bit0 = { .level0 = 1, .duration0 = 4, .level1 = 0, .duration1 = 9 },  // 0 bit: 0.4 µs high, 0.85 µs low
-        .bit1 = { .level0 = 1, .duration0 = 8, .level1 = 0, .duration1 = 5 },  // 1 bit: 0.8 µs high, 0.45 µs low
-        .flags.msb_first = true, // WS2812 protocol sends MSB first
-    };
     ESP_ERROR_CHECK(rmt_new_bytes_encoder(&bytes_encoder_config, &bytes_encoder));
 
-    rmt_transmit_config_t led_tx = {
-        .loop_count = 0  // No looping
-    };
 
-    ESP_ERROR_CHECK(rmt_transmit(rmt_LED_north, bytes_encoder, led_data, LED_NORTH_CHAIN * 3, &led_tx));
-    usleep(BLINK_INTERVAL_USEC);
-    ESP_ERROR_CHECK(rmt_transmit(rmt_LED_north, bytes_encoder, led_off, LED_NORTH_CHAIN * 3, &led_tx));
+    
+    
+
+    
 
     // SPI bus and device setup
     spi_bus_config_t spi_bus_cfg = {        // configure SPI bus properties and pins
@@ -325,20 +356,35 @@ int app_main(void)
     w_trans(TAP_CFG2, 0xE0);         // Enable interrupt
     w_trans(MD2_CFG, 0x80);          // Route interrupt to INT2
 
-    gpio_set_direction(BLINK_GPIO, GPIO_MODE_OUTPUT);  // Set pin to OUTPUT mode
 
+    led_w(led_one);
+    sleep(1);
+    led_w(led_off);
+    sleep(1);
+    led_w(led_rgby);
+    sleep(3);
+    led_w(led_off);
 
     while(1){                                          // Temporary loop to test reading registers and LED states
 
-        gpio_set_level(BLINK_GPIO, s_led_state); // Set LED state based on current LED state
-        s_led_state = !s_led_state; // Invert LED state
+        
         starburst( GYRO_X_LOW, read_burst );            // Get 12 bytes of data from accelerometer and gyroscope
+        ESP_LOGI(TAG, "Gyroscope values: X %d, Y %d, Z %d", (read_burst[1]  << 8) | read_burst[0] , (read_burst[3]  << 8) | read_burst[2], (read_burst[5]  << 8) | read_burst[4] );
+        ESP_LOGI(TAG, "Accelerometer values: X %d, Y %d, Z %d", (read_burst[7]  << 8) | read_burst[6] , (read_burst[9]  << 8) | read_burst[8], (read_burst[11]  << 8) | read_burst[10] );
 
-        //ESP_LOGD(TAG,"Interrupt Register status: 0x%02X", r_int());
-        ESP_LOGD(TAG, "Gyroscope values: X %d, Y %d, Z %d", (read_burst[1]  << 8) | read_burst[0] , (read_burst[3]  << 8) | read_burst[2], (read_burst[5]  << 8) | read_burst[4] );
-        ESP_LOGD(TAG, "Accelerometer values: X %d, Y %d, Z %d", (read_burst[7]  << 8) | read_burst[6] , (read_burst[9]  << 8) | read_burst[8], (read_burst[11]  << 8) | read_burst[10] );
-        usleep(BLINK_INTERVAL_USEC);
-        break;
+        if (s_led_state) {
+            
+            led_w(led_off);
+            s_led_state = !s_led_state;
+
+        }
+        else{
+            led_w(led_rgby);
+            s_led_state = !s_led_state;
+        } 
+
+        usleep(BLINK_USEC);
+        
 
         
 

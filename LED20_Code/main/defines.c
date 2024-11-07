@@ -56,7 +56,7 @@
 
 
 // WS2812 Timing values
-#define WS2812_T0H 4   // 0.4 µs high for "0" bit
-#define WS2812_T0L 9   // 0.85 µs low for "0" bit
-#define WS2812_T1H 8   // 0.8 µs high for "1" bit
-#define WS2812_T1L 5   // 0.45 µs low for "1" bit
+#define T0H 3   // 0.3 µs high for "0" bit
+#define T0L 9   // 0.85 µs low for "0" bit
+#define T1H 6   // 0.6 µs high for "1" bit
+#define T1L 6   // 0.6 µs low for "1" bit
