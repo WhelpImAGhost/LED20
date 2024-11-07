@@ -8,7 +8,7 @@
 	)
 	(paper "A4")
 	(title_block
-		(title "LED20 Updated Schematic")
+		(title "LED20 Preliminary PCB Layout")
 		(date "2024-11-06")
 		(rev "1")
 		(company "Team 01")
@@ -4955,7 +4955,7 @@
 		(descr "Generic Buzzer, D12mm height 9.5mm with RM7.6mm")
 		(tags "buzzer")
 		(property "Reference" "BZ1"
-			(at 3.8 -7.2 360)
+			(at 3.8 -7.2 0)
 			(layer "F.SilkS")
 			(uuid "843efeb8-dab7-47df-8474-3e14c4f7077e")
 			(effects
@@ -4966,7 +4966,7 @@
 			)
 		)
 		(property "Value" "Piezo Buzzer"
-			(at 3.8 7.4 360)
+			(at 3.8 7.4 0)
 			(layer "F.Fab")
 			(uuid "3afee97e-defd-48b3-8226-968879394a1f")
 			(effects
@@ -5065,7 +5065,7 @@
 			(uuid "124aab26-a40b-417e-8178-f77f51c83825")
 		)
 		(fp_text user "+"
-			(at -0.01 -2.54 360)
+			(at -0.01 -2.54 0)
 			(layer "F.SilkS")
 			(uuid "948569b2-1d66-430c-b6ff-4625284b03a6")
 			(effects
@@ -5076,7 +5076,7 @@
 			)
 		)
 		(fp_text user "+"
-			(at -0.01 -2.54 360)
+			(at -0.01 -2.54 0)
 			(layer "F.Fab")
 			(uuid "4987efbb-c1bf-4d7f-9514-d2bf6c7deb3b")
 			(effects
@@ -5087,7 +5087,7 @@
 			)
 		)
 		(fp_text user "${REFERENCE}"
-			(at 3.8 -4 360)
+			(at 3.8 -4 0)
 			(layer "F.Fab")
 			(uuid "fa4ff50b-4fdc-44ec-bea0-f6b1a8339e28")
 			(effects
