@@ -6,7 +6,7 @@
 	(paper "A4")
 	(title_block
 		(title "LED20 Updated Schematic")
-		(date "2024-11-04")
+		(date "2024-11-06")
 		(rev "2")
 		(company "Team 01")
 		(comment 1 "Schematic of LED20 prototype")
@@ -5633,7 +5633,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Buzzer_Beeper:Buzzer_12x9.5RM7.6"
 			(at 95.885 147.32 90)
 			(effects
 				(font
