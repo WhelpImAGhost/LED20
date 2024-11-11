@@ -54,7 +54,7 @@
 // Sensor classifications and constants
 
 #define SPI_CLOCK_SPEED 8           // SPI transfer speed in MHz
-
+#define ACCEL_SENSITIVITY_4G 0.000122
 
 
 // Testing and debugging
@@ -239,16 +239,16 @@ void starburst ( uint8_t start_address, int8_t data[12]){     // A function to b
 
 void led_w(uint8_t *led_data){
     
-     ESP_ERROR_CHECK (rmt_enable( rmt_LED_north));
+    ESP_ERROR_CHECK (rmt_enable( rmt_LED_north));
 
     ESP_LOGD(TAG, "Setting up LED write");
     rmt_transmit_config_t led_tx = {
         .loop_count = 0  // No looping
     };
+
     ESP_LOGD(TAG, "Attempting LED write");
     ESP_ERROR_CHECK(rmt_transmit(rmt_LED_north, bytes_encoder, led_data, LED_NORTH_CHAIN * 3, &led_tx));
     ESP_ERROR_CHECK(rmt_tx_wait_all_done(rmt_LED_north, portMAX_DELAY));
-
     ESP_ERROR_CHECK (rmt_disable( rmt_LED_north));
 
     return;
@@ -259,16 +259,17 @@ int app_main(void)
 {
     // Local variable declarations
     esp_err_t spi_error;
+    int8_t z_offset = (int8_t)(Z_OFFSET * USR_OFFSET_FACTOR+0.5);
     //int8_t read_temp[2];
     int8_t read_burst[12];
 
 
     uint8_t led_one[5 * 3] = {
-    0x00, 0x00, 0x00,  // Green (128), Red (0), Blue (0) - Red
-    0x00, 0x00, 0x00,  // Green (0), Red (128), Blue (0) - Green
+    0x00, 0x00, 0x00,  
+    0x00, 0x00, 0x00,  
     0x00, 0x00, 0x80,  // Green (0), Red (0), Blue (128) - Blue
-    0x00, 0x00, 0x00,  // Green (128), Red (128), Blue (0) - Yellow
-    0x00, 0x00, 0x00   // Green (128), Red (0), Blue (128) - Cyan
+    0x00, 0x00, 0x00,  
+    0x00, 0x00, 0x00  
 };
 
     uint8_t led_rgby[15] = {
@@ -287,35 +288,21 @@ int app_main(void)
     }
 
     // LED RMT setup
-
-   
-
     if (rmt_LED_north) {
         rmt_del_channel(rmt_LED_north);
         rmt_LED_north = NULL;   
     }   
-
-
-    ESP_ERROR_CHECK( rmt_new_tx_channel(&rmt_north_config, &rmt_LED_north));
-   
-
+    ESP_ERROR_CHECK(rmt_new_tx_channel(&rmt_north_config, &rmt_LED_north));
     ESP_ERROR_CHECK(rmt_new_bytes_encoder(&bytes_encoder_config, &bytes_encoder));
 
 
-    
-    
-
-    
-
     // SPI bus and device setup
     spi_bus_config_t spi_bus_cfg = {        // configure SPI bus properties and pins
-
         .miso_io_num = PIN_MISO,            // Set up IO pins 
         .mosi_io_num = PIN_MOSI,
         .sclk_io_num = PIN_SCK,
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
-
     };
 
 
@@ -338,8 +325,12 @@ int app_main(void)
     
     // Reset and intialize sensors
     w_trans(CTRL3_C, 0x1);    // Reset the sensor
-    w_trans(CTRL1_XL, 0xA4);    // Set the speed and rate of the accel
-    w_trans(CTRL2_G, 0xAC);     // Set the speed and rate of the gyro
+    w_trans(CTRL1_XL, 0x72);    // Set the speed and rate of the accel
+    w_trans(CTRL2_G, 0x7C);     // Set the speed and rate of the gyro
+    w_trans(CTRL6_C, 0x00);     // Set high performance for accel and xyz offset resolution (2^-10)
+    w_trans(CTRL7_G, 0x02);     // Enable User offsets for low pass filter
+    w_trans(CTRL8_XL, 0x00);    // Set up Low Pass Filter for accel
+    w_trans(Z_OFS_USR, z_offset); // Set the calculated z offset
     
     // Set up Significant Motion Detection interrupt on INT1
     w_trans(FUNC_CFG_ACCESS, 0x80);  // Access embedded functions
@@ -369,8 +360,11 @@ int app_main(void)
 
         
         starburst( GYRO_X_LOW, read_burst );            // Get 12 bytes of data from accelerometer and gyroscope
-        ESP_LOGI(TAG, "Gyroscope values: X %d, Y %d, Z %d", (read_burst[1]  << 8) | read_burst[0] , (read_burst[3]  << 8) | read_burst[2], (read_burst[5]  << 8) | read_burst[4] );
-        ESP_LOGI(TAG, "Accelerometer values: X %d, Y %d, Z %d", (read_burst[7]  << 8) | read_burst[6] , (read_burst[9]  << 8) | read_burst[8], (read_burst[11]  << 8) | read_burst[10] );
+        ESP_LOGI(TAG, "Gyroscope values: X %d, Y %d, Z %d", ( read_burst[1]  << 8) | read_burst[0]  , (read_burst[3]  << 8) | read_burst[2], (read_burst[5]  << 8) | read_burst[4] );
+        ESP_LOGI(TAG, "Accelerometer values: X %.3f g, Y %.3f g, Z %.3f g",
+         ((int16_t)((read_burst[7] << 8) | read_burst[6])) * ACCEL_SENSITIVITY_4G,
+         ((int16_t)((read_burst[9] << 8) | read_burst[8])) * ACCEL_SENSITIVITY_4G,
+         ((int16_t)((read_burst[11] << 8) | read_burst[10])) * ACCEL_SENSITIVITY_4G);
 
         if (s_led_state) {
             

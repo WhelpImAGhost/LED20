@@ -12,12 +12,20 @@
 #define CTRL1_XL 0x10
 #define CTRL2_G 0x11
 #define CTRL3_C 0x12
+#define CTRL6_C 0x15
+#define CTRL7_G 0x16
+#define CTRL8_XL 0x17
 #define WAKEUP_DUR 0x5C
 #define WAKEUP_THS 0x5B
 #define TAP_CFG0 0x56
 #define TAP_CFG2 0x58
 #define MD1_CFG 0x5E
 #define MD2_CFG 0x5F
+#define X_OFS_USR 0x73
+#define Y_OFS_USR 0x74
+#define Z_OFS_USR 0x75
+#define Z_OFFSET -0.007
+#define USR_OFFSET_FACTOR (1 << 10)
 
 
 // Embedded Function Control Registers
