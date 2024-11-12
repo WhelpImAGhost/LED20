@@ -55,6 +55,9 @@
 
 #define SPI_CLOCK_SPEED 8           // SPI transfer speed in MHz
 #define ACCEL_SENSITIVITY_4G 0.000122
+#define GYRO_SENSITIVITY_500DPS 0.0175
+#define Z_OFFSET_ACC -0.007
+#define Z_OFFSET_GYRO -178
 
 
 // Testing and debugging
@@ -259,18 +262,31 @@ int app_main(void)
 {
     // Local variable declarations
     esp_err_t spi_error;
-    int8_t z_offset = (int8_t)(Z_OFFSET * USR_OFFSET_FACTOR+0.5);
+    int8_t z_offset_acc = (int8_t)(Z_OFFSET_ACC * USR_OFFSET_FACTOR+0.5);
     //int8_t read_temp[2];
     int8_t read_burst[12];
 
 
-    uint8_t led_one[5 * 3] = {
-    0x00, 0x00, 0x00,  
-    0x00, 0x00, 0x00,  
-    0x00, 0x00, 0x80,  // Green (0), Red (0), Blue (128) - Blue
-    0x00, 0x00, 0x00,  
-    0x00, 0x00, 0x00  
-};
+    uint8_t led_one[20 * 3] = {0};    
+
+    for(int i = 0; i < LED_NORTH_CHAIN; i++){
+
+        led_one[3*i] = 0x00;
+        led_one[3*i+1] = 0x00;
+        led_one[3*i+2] = 0xFF;
+
+    } 
+
+
+    uint8_t led_one_red[15] = {
+    0x00, 0x00, 0x00,  // Green (128), Red (0), Blue (0) - Red
+    0x00, 0x00, 0x00,  // Green (0), Red (128), Blue (0) - Green
+    0x0, 0x0, 0xFF,  // Green (0), Red (0), Blue (128) - Blue
+    0x00, 0x00, 0x00,  // Green (128), Red (128), Blue (0) - Yellow
+    0x00, 0x00, 0x00   // Green (128), Red (0), Blue (128) - Cyan
+
+    };
+
 
     uint8_t led_rgby[15] = {
     0x00, 0x80, 0x00,  // Green (128), Red (0), Blue (0) - Red
@@ -326,11 +342,11 @@ int app_main(void)
     // Reset and intialize sensors
     w_trans(CTRL3_C, 0x1);    // Reset the sensor
     w_trans(CTRL1_XL, 0x72);    // Set the speed and rate of the accel
-    w_trans(CTRL2_G, 0x7C);     // Set the speed and rate of the gyro
+    w_trans(CTRL2_G, 0x94);     // Set the speed and rate of the gyro
     w_trans(CTRL6_C, 0x00);     // Set high performance for accel and xyz offset resolution (2^-10)
     w_trans(CTRL7_G, 0x02);     // Enable User offsets for low pass filter
     w_trans(CTRL8_XL, 0x00);    // Set up Low Pass Filter for accel
-    w_trans(Z_OFS_USR, z_offset); // Set the calculated z offset
+
     
     // Set up Significant Motion Detection interrupt on INT1
     w_trans(FUNC_CFG_ACCESS, 0x80);  // Access embedded functions
@@ -340,41 +356,46 @@ int app_main(void)
     w_trans(FUNC_CFG_ACCESS, 0x00);  // Return to control registers
     w_trans(MD1_CFG, 0x02);             // Set INT1_EMB_FUNC in MD1_CFG
 
+
     // Set up Inactivity Detection intterupt on INT2
-    w_trans(WAKEUP_DUR, 0x02);       // Set inactivity time 
+    w_trans(WAKEUP_DUR, 0x0F);       // Set inactivity time 
     w_trans(WAKEUP_THS, 0x01);       // Set inactivity threshold
-    w_trans(TAP_CFG0, 0x00);         // Set sleep-change notification
+    w_trans(TAP_CFG0, 0x20);         // Set sleep-change notification
     w_trans(TAP_CFG2, 0xE0);         // Enable interrupt
     w_trans(MD2_CFG, 0x80);          // Route interrupt to INT2
 
+    //w_trans(Z_OFS_ACC, z_offset_acc); // Set the calculated z offset
 
-    led_w(led_one);
-    sleep(1);
     led_w(led_off);
-    sleep(1);
-    led_w(led_rgby);
-    sleep(3);
-    led_w(led_off);
+    led_w(led_one_red);
+    sleep(2);
 
     while(1){                                          // Temporary loop to test reading registers and LED states
 
         
         starburst( GYRO_X_LOW, read_burst );            // Get 12 bytes of data from accelerometer and gyroscope
-        ESP_LOGI(TAG, "Gyroscope values: X %d, Y %d, Z %d", ( read_burst[1]  << 8) | read_burst[0]  , (read_burst[3]  << 8) | read_burst[2], (read_burst[5]  << 8) | read_burst[4] );
+        ESP_LOGI(TAG, "Gyroscope values: X %.3f, Y %.3f, Z %.3f", 
+        ( (read_burst[1]  << 8) | read_burst[0]) * GYRO_SENSITIVITY_500DPS - 0.66,
+        ( (read_burst[3]  << 8) | read_burst[2]) * GYRO_SENSITIVITY_500DPS - 0.66, 
+        ( (read_burst[5]  << 8) | read_burst[4]) * GYRO_SENSITIVITY_500DPS + 3.10);
+
+
         ESP_LOGI(TAG, "Accelerometer values: X %.3f g, Y %.3f g, Z %.3f g",
          ((int16_t)((read_burst[7] << 8) | read_burst[6])) * ACCEL_SENSITIVITY_4G,
          ((int16_t)((read_burst[9] << 8) | read_burst[8])) * ACCEL_SENSITIVITY_4G,
          ((int16_t)((read_burst[11] << 8) | read_burst[10])) * ACCEL_SENSITIVITY_4G);
 
+
         if (s_led_state) {
             
-            led_w(led_off);
+            led_w(led_one_red);
             s_led_state = !s_led_state;
 
         }
         else{
             led_w(led_rgby);
             s_led_state = !s_led_state;
+
         } 
 
         usleep(BLINK_USEC);
