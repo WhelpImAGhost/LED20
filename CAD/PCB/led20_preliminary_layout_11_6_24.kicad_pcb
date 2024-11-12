@@ -6,7 +6,7 @@
 		(thickness 1.6)
 		(legacy_teardrops no)
 	)
-	(paper "A5")
+	(paper "A4")
 	(title_block
 		(title "LED20 Preliminary PCB Layout")
 		(date "2024-11-06")
@@ -49,7 +49,7 @@
 		(pad_to_mask_clearance 0)
 		(allow_soldermask_bridges_in_footprints no)
 		(pcbplotparams
-			(layerselection 0x0001000_7ffffffe)
+			(layerselection 0x0040000_7ffffffe)
 			(plot_on_all_layers_selection 0x7ffffff_80000001)
 			(disableapertmacros no)
 			(usegerberextensions no)
@@ -83,7 +83,7 @@
 			(mirror no)
 			(drillshape 0)
 			(scaleselection 1)
-			(outputdirectory "./")
+			(outputdirectory "")
 		)
 	)
 	(net 0 "")
@@ -115,7 +115,7 @@
 	(footprint "Connector_JST:JST_PH_B2B-PH-K_1x02_P2.00mm_Vertical"
 		(layer "F.Cu")
 		(uuid "150022b5-d544-4f05-bb43-8e0fa18ee0e3")
-		(at 97.5 43)
+		(at 137.5 60.95)
 		(descr "JST PH series connector, B2B-PH-K (http://www.jst-mfg.com/product/pdf/eng/ePH.pdf), generated with kicad-footprint-generator")
 		(tags "connector JST PH side entry")
 		(property "Reference" "U6"
@@ -583,7 +583,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D1.0mm"
 		(layer "F.Cu")
 		(uuid "225dfb8f-fc44-46ce-9b94-7582803a5763")
-		(at 98 77.05 180)
+		(at 138 95 180)
 		(descr "SMD pad as test Point, diameter 1.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP2"
@@ -698,7 +698,7 @@
 	(footprint "Led20:ChargePump"
 		(layer "F.Cu")
 		(uuid "23324539-8b39-4c26-8112-70c7bd88448b")
-		(at 117.6375 49.55)
+		(at 157.6375 67.5)
 		(descr "SOT, 6 Pin (~), generated with kicad-footprint-generator ipc_gullwing_generator.py")
 		(tags "SOT TO_SOT_SMD")
 		(property "Reference" "U2"
@@ -991,7 +991,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D1.0mm"
 		(layer "F.Cu")
 		(uuid "2695fd32-1d9d-49da-a4fa-b08a7942552b")
-		(at 107.7103 75.549999)
+		(at 147.7103 93.499999)
 		(descr "SMD pad as test Point, diameter 1.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP10"
@@ -1106,7 +1106,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D1.0mm"
 		(layer "F.Cu")
 		(uuid "2da10791-2657-4536-96d2-2a1072b3d907")
-		(at 114 78.55)
+		(at 154 96.5)
 		(descr "SMD pad as test Point, diameter 1.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP23"
@@ -1221,7 +1221,7 @@
 	(footprint "LED_SMD:LED_SK6812MINI_PLCC4_3.5x3.5mm_P1.75mm"
 		(layer "F.Cu")
 		(uuid "3b9d4dfe-6bf9-4c33-bfd9-569bafcd9412")
-		(at 118 61.05)
+		(at 158 79)
 		(descr "3.5mm x 3.5mm PLCC4 Addressable RGB LED NeoPixel, https://cdn-shop.adafruit.com/product-files/2686/SK6812MINI_REV.01-1-2.pdf")
 		(tags "LED RGB NeoPixel Mini PLCC-4 3535")
 		(property "Reference" "D1"
@@ -1483,7 +1483,7 @@
 	(footprint "Capacitor_SMD:C_0603_1608Metric"
 		(layer "F.Cu")
 		(uuid "49d4c409-d46a-47bc-844b-5e5c31c7c792")
-		(at 110 49 90)
+		(at 150 66.95 90)
 		(descr "Capacitor SMD 0603 (1608 Metric), square (rectangular) end terminal, IPC_7351 nominal, (Body size source: IPC-SM-782 page 76, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "capacitor")
 		(property "Reference" "C3"
@@ -1696,7 +1696,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D1.0mm"
 		(layer "F.Cu")
 		(uuid "4ade2075-5749-4aea-8036-30bfaad054cc")
-		(at 86.1444 63.01)
+		(at 126.1444 80.96)
 		(descr "SMD pad as test Point, diameter 1.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP8"
@@ -1811,7 +1811,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D1.0mm"
 		(layer "F.Cu")
 		(uuid "4d8a49c7-aaa9-4981-90ed-bab934e92498")
-		(at 91 45.55)
+		(at 131 63.5)
 		(descr "SMD pad as test Point, diameter 1.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP15"
@@ -1926,7 +1926,7 @@
 	(footprint "Connector_JST:JST_PH_B2B-PH-K_1x02_P2.00mm_Vertical"
 		(layer "F.Cu")
 		(uuid "55bf236b-87a4-4985-98f4-22e2c4f0f818")
-		(at 91 77.05)
+		(at 131 95)
 		(descr "JST PH series connector, B2B-PH-K (http://www.jst-mfg.com/product/pdf/eng/ePH.pdf), generated with kicad-footprint-generator")
 		(tags "connector JST PH side entry")
 		(property "Reference" "U3"
@@ -2393,7 +2393,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D1.0mm"
 		(layer "F.Cu")
 		(uuid "660f87b3-dd7f-4666-a1ec-7869344aaa78")
-		(at 93.5 45.55)
+		(at 133.5 63.5)
 		(descr "SMD pad as test Point, diameter 1.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP16"
@@ -2508,7 +2508,7 @@
 	(footprint "Capacitor_SMD:C_0603_1608Metric"
 		(layer "F.Cu")
 		(uuid "76f0753c-c66c-4a7b-a621-998b55ea83a2")
-		(at 104.2103 79.343699)
+		(at 144.2103 97.293699)
 		(descr "Capacitor SMD 0603 (1608 Metric), square (rectangular) end terminal, IPC_7351 nominal, (Body size source: IPC-SM-782 page 76, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "capacitor")
 		(property "Reference" "C5"
@@ -2721,7 +2721,7 @@
 	(footprint "Led20:LGA-14L_2P5X3X0P83_STM-L"
 		(layer "F.Cu")
 		(uuid "7d2f1751-8527-4b8a-8e39-1d5b7b4de7f6")
-		(at 104.2103 75.299999)
+		(at 144.2103 93.249999)
 		(tags "LSM6DSO32TR ")
 		(property "Reference" "U1"
 			(at 0 0 0)
@@ -3877,7 +3877,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D1.0mm"
 		(layer "F.Cu")
 		(uuid "83105cbc-91b1-48b7-b811-f46f072cb3b6")
-		(at 86.1444 68.01)
+		(at 126.1444 85.96)
 		(descr "SMD pad as test Point, diameter 1.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP7"
@@ -3992,7 +3992,7 @@
 	(footprint "Led20:XIAO-ESP32-C6-SMD"
 		(layer "F.Cu")
 		(uuid "854f73a7-4935-4e94-aadf-b372c2c2dc48")
-		(at 98 60.63)
+		(at 138 78.58)
 		(property "Reference" "U4"
 			(at -9.5 -11.5 0)
 			(layer "F.SilkS")
@@ -4508,7 +4508,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D1.0mm"
 		(layer "F.Cu")
 		(uuid "89629e8b-7edb-4837-82ea-86ca6bd90d47")
-		(at 106 46.05)
+		(at 146 64)
 		(descr "SMD pad as test Point, diameter 1.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP13"
@@ -4623,7 +4623,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D1.0mm"
 		(layer "F.Cu")
 		(uuid "946737a2-3d74-433c-ae03-0d74554e78e3")
-		(at 121.1375 49.5)
+		(at 161.1375 67.45)
 		(descr "SMD pad as test Point, diameter 1.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP18"
@@ -4738,7 +4738,7 @@
 	(footprint "Capacitor_SMD:C_0603_1608Metric"
 		(layer "F.Cu")
 		(uuid "9570a2c2-e5e5-4aa9-b9e4-87f1d74ef4df")
-		(at 125.6375 49.55 -90)
+		(at 165.6375 67.5 -90)
 		(descr "Capacitor SMD 0603 (1608 Metric), square (rectangular) end terminal, IPC_7351 nominal, (Body size source: IPC-SM-782 page 76, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "capacitor")
 		(property "Reference" "C1"
@@ -4951,7 +4951,7 @@
 	(footprint "Buzzer_Beeper:Buzzer_12x9.5RM7.6"
 		(layer "F.Cu")
 		(uuid "97c0864f-13c0-4b2d-8f7f-f04f93b0d2f4")
-		(at 123.6 72.05 180)
+		(at 163.6 90 180)
 		(descr "Generic Buzzer, D12mm height 9.5mm with RM7.6mm")
 		(tags "buzzer")
 		(property "Reference" "BZ1"
@@ -5134,7 +5134,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D1.0mm"
 		(layer "F.Cu")
 		(uuid "a231c552-ab67-405d-964e-9c9567e69a7b")
-		(at 103.5 46.05)
+		(at 143.5 64)
 		(descr "SMD pad as test Point, diameter 1.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP14"
@@ -5249,7 +5249,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D1.0mm"
 		(layer "F.Cu")
 		(uuid "a66ca34c-91c0-4490-9cbe-3cd0bcedd13d")
-		(at 85 77.05 180)
+		(at 125 95 180)
 		(descr "SMD pad as test Point, diameter 1.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP1"
@@ -5364,7 +5364,7 @@
 	(footprint "Capacitor_SMD:C_0603_1608Metric"
 		(layer "F.Cu")
 		(uuid "a9c04e64-06c9-44c7-af4d-b441683dcbaf")
-		(at 117.725 44.5 180)
+		(at 157.725 62.45 180)
 		(descr "Capacitor SMD 0603 (1608 Metric), square (rectangular) end terminal, IPC_7351 nominal, (Body size source: IPC-SM-782 page 76, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "capacitor")
 		(property "Reference" "C2"
@@ -5577,7 +5577,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D1.0mm"
 		(layer "F.Cu")
 		(uuid "ab7f0ead-c10b-45aa-8721-d8b7c61e73d5")
-		(at 123.1375 48.55)
+		(at 163.1375 66.5)
 		(descr "SMD pad as test Point, diameter 1.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP17"
@@ -5692,7 +5692,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D1.0mm"
 		(layer "F.Cu")
 		(uuid "b6044bb0-c8f9-4b42-8b42-48e68d4cc626")
-		(at 109.1444 61.01)
+		(at 149.1444 78.96)
 		(descr "SMD pad as test Point, diameter 1.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP4"
@@ -5807,7 +5807,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D1.0mm"
 		(layer "F.Cu")
 		(uuid "c27313bd-fe51-4082-836b-3fe2ec2db366")
-		(at 113.5 48.5)
+		(at 153.5 66.45)
 		(descr "SMD pad as test Point, diameter 1.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP20"
@@ -5922,7 +5922,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D1.0mm"
 		(layer "F.Cu")
 		(uuid "c55656ae-82fd-419d-9e53-532f54445d4f")
-		(at 109.1444 58.01)
+		(at 149.1444 75.96)
 		(descr "SMD pad as test Point, diameter 1.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP3"
@@ -6037,7 +6037,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D1.0mm"
 		(layer "F.Cu")
 		(uuid "c803b731-4e9b-4cf9-aa12-8ad5a1bb88c1")
-		(at 109.1444 55.51)
+		(at 149.1444 73.46)
 		(descr "SMD pad as test Point, diameter 1.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP19"
@@ -6152,7 +6152,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D1.0mm"
 		(layer "F.Cu")
 		(uuid "dc4d29ae-d25e-4163-9af2-502372338d1f")
-		(at 109.1444 65.51)
+		(at 149.1444 83.46)
 		(descr "SMD pad as test Point, diameter 1.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP6"
@@ -6267,7 +6267,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D1.0mm"
 		(layer "F.Cu")
 		(uuid "ddf8a3e4-8a70-46f8-a08c-0b06313c2a6c")
-		(at 86.6444 53.01)
+		(at 126.6444 70.96)
 		(descr "SMD pad as test Point, diameter 1.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP12"
@@ -6382,7 +6382,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D1.0mm"
 		(layer "F.Cu")
 		(uuid "eeac37fe-0000-4df9-93bf-196a7f9cbc3b")
-		(at 86.1444 55.51)
+		(at 126.1444 73.46)
 		(descr "SMD pad as test Point, diameter 1.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP11"
@@ -6497,7 +6497,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D1.0mm"
 		(layer "F.Cu")
 		(uuid "ef43a59e-041c-4da7-a163-3912cef83ec6")
-		(at 109.1444 63.51)
+		(at 149.1444 81.46)
 		(descr "SMD pad as test Point, diameter 1.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP5"
@@ -6612,7 +6612,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D1.0mm"
 		(layer "F.Cu")
 		(uuid "f70a18d0-3e19-48ae-9aac-c0b50e180386")
-		(at 86.1444 60.51)
+		(at 126.1444 78.46)
 		(descr "SMD pad as test Point, diameter 1.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP9"
@@ -6727,7 +6727,7 @@
 	(footprint "Capacitor_SMD:C_0603_1608Metric"
 		(layer "F.Cu")
 		(uuid "fe951483-4a26-4783-8e1d-3882fedc21fd")
-		(at 110.2103 78.343699)
+		(at 150.2103 96.293699)
 		(descr "Capacitor SMD 0603 (1608 Metric), square (rectangular) end terminal, IPC_7351 nominal, (Body size source: IPC-SM-782 page 76, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "capacitor")
 		(property "Reference" "C4"
@@ -6938,8 +6938,8 @@
 		)
 	)
 	(gr_circle
-		(center 103.1375 60.05)
-		(end 123 41.05)
+		(center 143.1375 78)
+		(end 163 59)
 		(stroke
 			(width 0.05)
 			(type default)
@@ -6949,7 +6949,7 @@
 		(uuid "3ba7b4f8-e826-4872-a302-a70a39cf05a8")
 	)
 	(gr_text "NC"
-		(at 112.5 60.55 0)
+		(at 152.5 78.5 0)
 		(layer "F.SilkS")
 		(uuid "09d8a4f7-89b4-4adf-a82c-0c0d7f180168")
 		(effects
@@ -6961,7 +6961,7 @@
 		)
 	)
 	(gr_text "DIN (To LED)\n"
-		(at 121 62.55 0)
+		(at 161 80.5 0)
 		(layer "F.SilkS")
 		(uuid "24954b9e-9700-47d9-9ba2-d6705a2c42ef")
 		(effects
@@ -6973,7 +6973,7 @@
 		)
 	)
 	(gr_text "GND\n"
-		(at 112 62.55 0)
+		(at 152 80.5 0)
 		(layer "F.SilkS")
 		(uuid "b77f2f23-080a-49f8-944d-38c4695386e8")
 		(effects
@@ -6985,7 +6985,7 @@
 		)
 	)
 	(gr_text "VCC"
-		(at 121 60.55 0)
+		(at 161 78.5 0)
 		(layer "F.SilkS")
 		(uuid "e9f98285-62f4-489d-b516-2b7d2f2b8c1a")
 		(effects
