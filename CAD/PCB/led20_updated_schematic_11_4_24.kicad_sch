@@ -6,7 +6,7 @@
 	(paper "A4")
 	(title_block
 		(title "LED20 Updated Schematic")
-		(date "2024-11-11")
+		(date "2024-11-12")
 		(rev "3")
 		(company "Team 01")
 		(comment 1 "Schematic of LED20 prototype")
