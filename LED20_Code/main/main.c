@@ -62,11 +62,14 @@
 
 // Testing and debugging
 #define BLINK_USEC  500000
-static uint8_t s_led_state = 0;
+
+static const char* TAG = "LED20";
 static bool interrupt_triggered = false;
 static bool active_detect = false;
 static bool inactive_detect = false;
 
+
+// Global LED value 
 uint8_t led_red[15] = {
     0x00, 0xFF, 0x00,  // Green (128), Red (0), Blue (0) - Red
     0x00, 0xFF, 0x00,  // Green (0), Red (128), Blue (0) - Green
@@ -122,205 +125,17 @@ rmt_bytes_encoder_config_t bytes_encoder_config = {
 
 
 
+// Function prototypes
+
+void w_trans (uint16_t address, uint16_t data );
+uint8_t r_trans(uint8_t address);
+void r2_trans(uint8_t address, int8_t data[2]);
+void starburst ( uint8_t start_address, int8_t data[12]);
+void led_w(uint8_t *led_data);
+void IRAM_ATTR gpio_isr_handler(void* arg);
+void handle_interrupt_task(void* arg);
 
 
-
-
-static const char* TAG = "LED20";
-
-
-void w_trans (uint16_t address, uint16_t data ){
-    
-    spi_transaction_t transfer = { 0 };
-    
-    transfer.length = 8;
-    ESP_LOGD(TAG, "Setting flags");
-    transfer.flags = SPI_TRANS_USE_TXDATA;
-    ESP_LOGD(TAG, "Setting address");   
-    transfer.cmd = address;
-    ESP_LOGD(TAG, "Setting data");
-    transfer.tx_data[0] = data;
-    ESP_LOGD(TAG, "Attempting write at address 0x%02X", address);
-    ESP_ERROR_CHECK( spi_device_transmit(accel, &transfer) );
-    ESP_LOGD(TAG, "Write at address 0x%02X completed", address);
-
-    return;
-
-}
-
-uint8_t r_int(){
-
-
-    spi_transaction_t transfer = {0};
-    esp_err_t err;
-    transfer.length = 8;
-    transfer.rxlength = 8;
-    transfer.flags = SPI_TRANS_USE_RXDATA;  
-    transfer.cmd = (0x35 | 0x80) ;
-    ESP_LOGD(TAG, "Attempting to read Interrupt Status Register ");
-
-    err = spi_device_transmit(accel, &transfer);
-    ESP_ERROR_CHECK(err);
-
-
-    return transfer.rx_data[0];
-
-
-    
-}
-
-uint8_t r_trans(uint8_t address){
-
-    spi_transaction_t transfer = {0};
-    esp_err_t err;
-    transfer.length = 8;
-    transfer.rxlength = 8;
-    ESP_LOGD(TAG, "Setting flags");
-    transfer.flags = SPI_TRANS_USE_RXDATA;
-    ESP_LOGD(TAG, "Setting address");   
-    transfer.cmd = (address | 0x80) ;
-    ESP_LOGD(TAG, "Attempting read at address 0x%02x", address);
-
-    err = spi_device_transmit(accel, &transfer);
-    ESP_ERROR_CHECK(err);
-    return transfer.rx_data[0];
-
-}
-
-void r2_trans(uint8_t address, int8_t data[2]){
-
-    spi_transaction_t transfer = {0};
-    esp_err_t err;
-    transfer.length = 16;
-    transfer.rxlength = 16;
-    ESP_LOGD(TAG, "Setting flags");
-    transfer.flags = SPI_TRANS_USE_RXDATA;
-    ESP_LOGD(TAG, "Setting address");   
-    transfer.cmd = (address | 0x80) ;
-    ESP_LOGD(TAG, "Attempting read at address 0x%02X and 0x%02x", address, address + 0x1);
-
-    err = spi_device_transmit(accel, &transfer);
-    ESP_ERROR_CHECK(err);
-
-    data[0] = transfer.rx_data[0];
-    data[1] = transfer.rx_data[1];
-    return;
-
-
-    
-}
-
-
-
-void starburst ( uint8_t start_address, int8_t data[12]){     // A function to burst read 12 consecutive data segments
-
-    spi_transaction_t trans[3];                                 // Set up 3 transactions of 4 bytes
-    esp_err_t error;
-
-
-    for (int i = 0; i < 3; i++){
-
-
-        trans[i].length = 32;                                   // Each transaction has a length of 4 bytes
-        trans[i].rxlength = 32;                                 
-        trans[i].cmd = ( (start_address + (i*4)) | 0x80 );      // Increment starting addres by 4 each iteration
-        trans[i].flags = SPI_TRANS_USE_RXDATA;                  // Use rx_data until DMA access becomes necessary
-        trans[i].rx_buffer = NULL;
-        trans[i].tx_buffer = NULL;
-
-        ESP_LOGD(TAG, "Queued transaction at address 0x%02X",   // Queue 4 byte burst
-        start_address + 4*i );
-
-        error = spi_device_queue_trans(accel, &trans[i], portMAX_DELAY);
-        ESP_ERROR_CHECK(error);
-
-
-
-    }
-
-    for (int i = 0; i < 3; i++){
-
-        spi_transaction_t *receive;
-
-        error = spi_device_get_trans_result(accel, &receive,    // Run all queued transactions
-         portMAX_DELAY);
-        ESP_ERROR_CHECK(error);
-
-        data[4*i] = receive->rx_data[0];                        // Write gathered data to array
-        data[4*i+1] = receive->rx_data[1];
-        data[4*i+2] = receive->rx_data[2];
-        data[4*i+3] = receive->rx_data[3];
-        ESP_LOGD(TAG, "Gathered data from transaction at address 0x%02X", start_address + 4*i);
-
-
-
-
-    }
-    return;
-
-
-}
-
-
-
-void led_w(uint8_t *led_data){
-    
-    ESP_ERROR_CHECK (rmt_enable( rmt_LED_north));
-
-    ESP_LOGD(TAG, "Setting up LED write");
-    rmt_transmit_config_t led_tx = {
-        .loop_count = 0  // No looping
-    };
-
-    ESP_LOGD(TAG, "Attempting LED write");
-    ESP_ERROR_CHECK(rmt_transmit(rmt_LED_north, bytes_encoder, led_data, LED_NORTH_CHAIN * 3, &led_tx));
-    ESP_ERROR_CHECK(rmt_tx_wait_all_done(rmt_LED_north, portMAX_DELAY));
-    ESP_ERROR_CHECK (rmt_disable( rmt_LED_north));
-
-    return;
-}
-
-void IRAM_ATTR gpio_isr_handler(void* arg) {
-    // Check the level of the GPIO to determine edge
-    interrupt_triggered = true;
-    int level = gpio_get_level(PIN_INT2);
-
-    if (level == 1) {
-        // Rising edge detected (inactivity detected)
-        // Handle inactivity start here
-        inactive_detect = true;
-
-    } else {
-        // Falling edge detected (activity resumed)
-        // Handle activity resumption here
-        active_detect = true;
-    }
-    return;
-}
-
-void handle_interrupt_task(void* arg) {
-    while (1) {
-        if (interrupt_triggered) {
-            interrupt_triggered = false;  // Clear the flag
-
-            if(inactive_detect){
-                inactive_detect = false;
-                ESP_LOGE(TAG, "Inactive detected");
-                led_w(led_green);
-            }
-            else if (active_detect) {
-                active_detect = false;
-                ESP_LOGE(TAG, "Active detected");
-                led_w(led_red);
-
-            }
-            
-        }
-        
-        // Short delay to yield CPU time
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-}
 
 int app_main(void)
 {
@@ -427,7 +242,7 @@ int app_main(void)
 
     // Set up Inactivity Detection intterupt on INT2
     w_trans(WAKEUP_DUR, 0x0F);       // Set inactivity time 
-    w_trans(WAKEUP_THS, 0x02);       // Set inactivity threshold
+    w_trans(WAKEUP_THS, 0x08);       // Set inactivity threshold
     w_trans(TAP_CFG0, 0x20);         // Set sleep-change notification
     w_trans(TAP_CFG2, 0xE0);         // Enable interrupt
     w_trans(MD2_CFG, 0x80);          // Route interrupt to INT2
@@ -464,4 +279,172 @@ int app_main(void)
     }
     return 0;
     
+}
+
+void w_trans (uint16_t address, uint16_t data ){
+    
+    spi_transaction_t transfer = { 0 };
+    
+    transfer.length = 8;
+    ESP_LOGD(TAG, "Setting flags");
+    transfer.flags = SPI_TRANS_USE_TXDATA;
+    ESP_LOGD(TAG, "Setting address");   
+    transfer.cmd = address;
+    ESP_LOGD(TAG, "Setting data");
+    transfer.tx_data[0] = data;
+    ESP_LOGD(TAG, "Attempting write at address 0x%02X", address);
+    ESP_ERROR_CHECK( spi_device_transmit(accel, &transfer) );
+    ESP_LOGD(TAG, "Write at address 0x%02X completed", address);
+
+    return;
+
+}
+
+uint8_t r_trans(uint8_t address){
+
+    spi_transaction_t transfer = {0};
+    esp_err_t err;
+    transfer.length = 8;
+    transfer.rxlength = 8;
+    ESP_LOGD(TAG, "Setting flags");
+    transfer.flags = SPI_TRANS_USE_RXDATA;
+    ESP_LOGD(TAG, "Setting address");   
+    transfer.cmd = (address | 0x80) ;
+    ESP_LOGD(TAG, "Attempting read at address 0x%02x", address);
+
+    err = spi_device_transmit(accel, &transfer);
+    ESP_ERROR_CHECK(err);
+    return transfer.rx_data[0];
+
+}
+
+void r2_trans(uint8_t address, int8_t data[2]){
+
+    spi_transaction_t transfer = {0};
+    esp_err_t err;
+    transfer.length = 16;
+    transfer.rxlength = 16;
+    ESP_LOGD(TAG, "Setting flags");
+    transfer.flags = SPI_TRANS_USE_RXDATA;
+    ESP_LOGD(TAG, "Setting address");   
+    transfer.cmd = (address | 0x80) ;
+    ESP_LOGD(TAG, "Attempting read at address 0x%02X and 0x%02x", address, address + 0x1);
+
+    err = spi_device_transmit(accel, &transfer);
+    ESP_ERROR_CHECK(err);
+
+    data[0] = transfer.rx_data[0];
+    data[1] = transfer.rx_data[1];
+    return;
+
+
+    
+}
+
+void starburst ( uint8_t start_address, int8_t data[12]){     // A function to burst read 12 consecutive data segments
+
+    spi_transaction_t trans[3];                                 // Set up 3 transactions of 4 bytes
+    esp_err_t error;
+
+
+    for (int i = 0; i < 3; i++){
+
+
+        trans[i].length = 32;                                   // Each transaction has a length of 4 bytes
+        trans[i].rxlength = 32;                                 
+        trans[i].cmd = ( (start_address + (i*4)) | 0x80 );      // Increment starting addres by 4 each iteration
+        trans[i].flags = SPI_TRANS_USE_RXDATA;                  // Use rx_data until DMA access becomes necessary
+        trans[i].rx_buffer = NULL;
+        trans[i].tx_buffer = NULL;
+
+        ESP_LOGD(TAG, "Queued transaction at address 0x%02X",   // Queue 4 byte burst
+        start_address + 4*i );
+
+        error = spi_device_queue_trans(accel, &trans[i], portMAX_DELAY);
+        ESP_ERROR_CHECK(error);
+
+
+
+    }
+
+    for (int i = 0; i < 3; i++){
+
+        spi_transaction_t *receive;
+
+        error = spi_device_get_trans_result(accel, &receive,    // Run all queued transactions
+         portMAX_DELAY);
+        ESP_ERROR_CHECK(error);
+
+        data[4*i] = receive->rx_data[0];                        // Write gathered data to array
+        data[4*i+1] = receive->rx_data[1];
+        data[4*i+2] = receive->rx_data[2];
+        data[4*i+3] = receive->rx_data[3];
+        ESP_LOGD(TAG, "Gathered data from transaction at address 0x%02X", start_address + 4*i);
+
+
+
+
+    }
+    return;
+
+
+}
+
+void led_w(uint8_t *led_data){
+    
+    ESP_ERROR_CHECK (rmt_enable( rmt_LED_north));
+
+    ESP_LOGD(TAG, "Setting up LED write");
+    rmt_transmit_config_t led_tx = {
+        .loop_count = 0  // No looping
+    };
+
+    ESP_LOGD(TAG, "Attempting LED write");
+    ESP_ERROR_CHECK(rmt_transmit(rmt_LED_north, bytes_encoder, led_data, LED_NORTH_CHAIN * 3, &led_tx));
+    ESP_ERROR_CHECK(rmt_tx_wait_all_done(rmt_LED_north, portMAX_DELAY));
+    ESP_ERROR_CHECK (rmt_disable( rmt_LED_north));
+
+    return;
+}
+
+void IRAM_ATTR gpio_isr_handler(void* arg) {
+    // Check the level of the GPIO to determine edge
+    interrupt_triggered = true;
+    int level = gpio_get_level(PIN_INT2);
+
+    if (level == 1) {
+        // Rising edge detected (inactivity detected)
+        // Handle inactivity start here
+        inactive_detect = true;
+
+    } else {
+        // Falling edge detected (activity resumed)
+        // Handle activity resumption here
+        active_detect = true;
+    }
+    return;
+}
+
+void handle_interrupt_task(void* arg) {
+    while (1) {
+        if (interrupt_triggered) {
+            interrupt_triggered = false;  // Clear the flag
+
+            if(inactive_detect){
+                inactive_detect = false;
+                ESP_LOGE(TAG, "Inactive detected");
+                led_w(led_green);
+            }
+            else if (active_detect) {
+                active_detect = false;
+                ESP_LOGE(TAG, "Active detected");
+                led_w(led_red);
+
+            }
+            
+        }
+        
+        // Short delay to yield CPU time
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
 }
