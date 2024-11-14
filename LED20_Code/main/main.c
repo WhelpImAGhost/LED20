@@ -41,8 +41,8 @@
 #define PIN_MOSI 18 // MOSI GPIO of host
 #define PIN_SCK 19  // SCK GPIO of host
 #define PIN_CS 17   // CS GPIO of host
-#define PIN_INT1 1  // GPIO Input for interrupt 1
-#define PIN_INT2 2  // GPIO Input for interrupt 2
+#define PIN_INT1 0  // GPIO Input for interrupt 1
+#define PIN_INT2 1  // GPIO Input for interrupt 2
 
 
 // LED Connection and classifications
@@ -63,6 +63,27 @@
 // Testing and debugging
 #define BLINK_USEC  500000
 static uint8_t s_led_state = 0;
+static bool interrupt_triggered = false;
+static bool active_detect = false;
+static bool inactive_detect = false;
+
+uint8_t led_red[15] = {
+    0x00, 0xFF, 0x00,  // Green (128), Red (0), Blue (0) - Red
+    0x00, 0xFF, 0x00,  // Green (0), Red (128), Blue (0) - Green
+    0x0, 0xFF, 0x0,  // Green (0), Red (0), Blue (128) - Blue
+    0x00, 0xFF, 0x00,  // Green (128), Red (128), Blue (0) - Yellow
+    0x00, 0xFF, 0x00   // Green (128), Red (0), Blue (128) - Cyan
+
+};
+
+uint8_t led_green[15] = {
+    0xFF, 0x0, 0x00,  // Green (128), Red (0), Blue (0) - Red
+    0xFF, 0x0, 0x00,  // Green (0), Red (128), Blue (0) - Green
+    0xFF, 0x0, 0x0,  // Green (0), Red (0), Blue (128) - Blue
+    0xFF, 0x0, 0x00,  // Green (128), Red (128), Blue (0) - Yellow
+    0xFF, 0x0, 0x00   // Green (128), Red (0), Blue (128) - Cyan
+
+};
 
 
 // SPI bus device setup
@@ -240,6 +261,8 @@ void starburst ( uint8_t start_address, int8_t data[12]){     // A function to b
 
 }
 
+
+
 void led_w(uint8_t *led_data){
     
     ESP_ERROR_CHECK (rmt_enable( rmt_LED_north));
@@ -257,6 +280,47 @@ void led_w(uint8_t *led_data){
     return;
 }
 
+void IRAM_ATTR gpio_isr_handler(void* arg) {
+    // Check the level of the GPIO to determine edge
+    interrupt_triggered = true;
+    int level = gpio_get_level(PIN_INT2);
+
+    if (level == 1) {
+        // Rising edge detected (inactivity detected)
+        // Handle inactivity start here
+        inactive_detect = true;
+
+    } else {
+        // Falling edge detected (activity resumed)
+        // Handle activity resumption here
+        active_detect = true;
+    }
+    return;
+}
+
+void handle_interrupt_task(void* arg) {
+    while (1) {
+        if (interrupt_triggered) {
+            interrupt_triggered = false;  // Clear the flag
+
+            if(inactive_detect){
+                inactive_detect = false;
+                ESP_LOGE(TAG, "Inactive detected");
+                led_w(led_green);
+            }
+            else if (active_detect) {
+                active_detect = false;
+                ESP_LOGE(TAG, "Active detected");
+                led_w(led_red);
+
+            }
+            
+        }
+        
+        // Short delay to yield CPU time
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
 
 int app_main(void)
 {
@@ -266,7 +330,20 @@ int app_main(void)
     //int8_t read_temp[2];
     int8_t read_burst[12];
 
+    // ISR setup
 
+    gpio_config_t int_conf = {
+        .intr_type = GPIO_INTR_ANYEDGE,
+        .mode = GPIO_MODE_INPUT,
+        .pin_bit_mask = (1ULL << PIN_INT2),
+        .pull_down_en = 1,
+        .pull_up_en = 0,
+    };
+
+    gpio_config(&int_conf);
+    gpio_install_isr_service(0);
+    gpio_isr_handler_add(PIN_INT2,gpio_isr_handler, NULL);
+    xTaskCreate(handle_interrupt_task, "handle_interrupt_task", 2048, NULL, 10, NULL);
     uint8_t led_one[20 * 3] = {0};    
 
     for(int i = 0; i < LED_NORTH_CHAIN; i++){
@@ -341,30 +418,21 @@ int app_main(void)
     
     // Reset and intialize sensors
     w_trans(CTRL3_C, 0x1);    // Reset the sensor
-    w_trans(CTRL1_XL, 0x72);    // Set the speed and rate of the accel
+    w_trans(CTRL1_XL, 0x92);    // Set the speed and rate of the accel
     w_trans(CTRL2_G, 0x94);     // Set the speed and rate of the gyro
     w_trans(CTRL6_C, 0x00);     // Set high performance for accel and xyz offset resolution (2^-10)
     w_trans(CTRL7_G, 0x02);     // Enable User offsets for low pass filter
     w_trans(CTRL8_XL, 0x00);    // Set up Low Pass Filter for accel
 
-    
-    // Set up Significant Motion Detection interrupt on INT1
-    w_trans(FUNC_CFG_ACCESS, 0x80);  // Access embedded functions
-    w_trans(EMB_FUNC_EN_A, 0x20);    // Enable SMD interrupt
-    w_trans(EMB_FUNC_INT1, 0x20);    // Route SMD to INT1
-    w_trans(PAGE_RW, 0x80);          // Latching interrupts enable
-    w_trans(FUNC_CFG_ACCESS, 0x00);  // Return to control registers
-    w_trans(MD1_CFG, 0x02);             // Set INT1_EMB_FUNC in MD1_CFG
-
 
     // Set up Inactivity Detection intterupt on INT2
     w_trans(WAKEUP_DUR, 0x0F);       // Set inactivity time 
-    w_trans(WAKEUP_THS, 0x01);       // Set inactivity threshold
+    w_trans(WAKEUP_THS, 0x02);       // Set inactivity threshold
     w_trans(TAP_CFG0, 0x20);         // Set sleep-change notification
     w_trans(TAP_CFG2, 0xE0);         // Enable interrupt
     w_trans(MD2_CFG, 0x80);          // Route interrupt to INT2
 
-    //w_trans(Z_OFS_ACC, z_offset_acc); // Set the calculated z offset
+    w_trans(Z_OFS_ACC, z_offset_acc); // Set the calculated z offset
 
     led_w(led_off);
     led_w(led_one_red);
@@ -386,17 +454,6 @@ int app_main(void)
          ((int16_t)((read_burst[11] << 8) | read_burst[10])) * ACCEL_SENSITIVITY_4G);
 
 
-        if (s_led_state) {
-            
-            led_w(led_one_red);
-            s_led_state = !s_led_state;
-
-        }
-        else{
-            led_w(led_rgby);
-            s_led_state = !s_led_state;
-
-        } 
 
         usleep(BLINK_USEC);
         
