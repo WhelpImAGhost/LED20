@@ -29,6 +29,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_sleep.h"
 
 
 #include "defines.c"
@@ -63,28 +64,40 @@
 // Testing and debugging
 #define BLINK_USEC  500000
 
+
+static bool led_state = false;
+static bool first_inact = false;
 static const char* TAG = "LED20";
 static bool interrupt_triggered = false;
 static bool active_detect = false;
 static bool inactive_detect = false;
+int8_t read_burst[12];
 
 
 // Global LED value 
 uint8_t led_red[15] = {
     0x00, 0xFF, 0x00,  // Green (128), Red (0), Blue (0) - Red
     0x00, 0xFF, 0x00,  // Green (0), Red (128), Blue (0) - Green
-    0x0, 0xFF, 0x0,  // Green (0), Red (0), Blue (128) - Blue
+    0x00, 0xFF, 0x00,  // Green (0), Red (0), Blue (128) - Blue
     0x00, 0xFF, 0x00,  // Green (128), Red (128), Blue (0) - Yellow
     0x00, 0xFF, 0x00   // Green (128), Red (0), Blue (128) - Cyan
+};
+
+uint8_t led_blue[15] = {
+    0x00, 0x00, 0xFF,  // Green (128), Red (0), Blue (0) - Red
+    0x00, 0x00, 0xFF,  // Green (0), Red (128), Blue (0) - Green
+    0x00, 0x00, 0xFF,  // Green (0), Red (0), Blue (128) - Blue
+    0x00, 0x00, 0xFF,  // Green (128), Red (128), Blue (0) - Yellow
+    0x00, 0x00, 0xFF   // Green (128), Red (0), Blue (128) - Cyan
 
 };
 
 uint8_t led_green[15] = {
-    0xFF, 0x0, 0x00,  // Green (128), Red (0), Blue (0) - Red
-    0xFF, 0x0, 0x00,  // Green (0), Red (128), Blue (0) - Green
-    0xFF, 0x0, 0x0,  // Green (0), Red (0), Blue (128) - Blue
-    0xFF, 0x0, 0x00,  // Green (128), Red (128), Blue (0) - Yellow
-    0xFF, 0x0, 0x00   // Green (128), Red (0), Blue (128) - Cyan
+    0xFF, 0x00, 0x00,  // Green (128), Red (0), Blue (0) - Red
+    0xFF, 0x00, 0x00,  // Green (0), Red (128), Blue (0) - Green
+    0xFF, 0x00, 0x00,  // Green (0), Red (0), Blue (128) - Blue
+    0xFF, 0x00, 0x00,  // Green (128), Red (128), Blue (0) - Yellow
+    0xFF, 0x00, 0x00   // Green (128), Red (0), Blue (128) - Cyan
 
 };
 
@@ -134,7 +147,8 @@ void starburst ( uint8_t start_address, int8_t data[12]);
 void led_w(uint8_t *led_data);
 void IRAM_ATTR gpio_isr_handler(void* arg);
 void handle_interrupt_task(void* arg);
-
+void activity_sequence();
+void inactivity_sequence();
 
 
 int app_main(void)
@@ -143,7 +157,7 @@ int app_main(void)
     esp_err_t spi_error;
     int8_t z_offset_acc = (int8_t)(Z_OFFSET_ACC * USR_OFFSET_FACTOR+0.5);
     //int8_t read_temp[2];
-    int8_t read_burst[12];
+    
 
     // ISR setup
 
@@ -151,23 +165,11 @@ int app_main(void)
         .intr_type = GPIO_INTR_ANYEDGE,
         .mode = GPIO_MODE_INPUT,
         .pin_bit_mask = (1ULL << PIN_INT2),
-        .pull_down_en = 1,
-        .pull_up_en = 0,
+        .pull_down_en = 0,
+        .pull_up_en = 1,
     };
 
-    gpio_config(&int_conf);
-    gpio_install_isr_service(0);
-    gpio_isr_handler_add(PIN_INT2,gpio_isr_handler, NULL);
-    xTaskCreate(handle_interrupt_task, "handle_interrupt_task", 2048, NULL, 10, NULL);
-    uint8_t led_one[20 * 3] = {0};    
-
-    for(int i = 0; i < LED_NORTH_CHAIN; i++){
-
-        led_one[3*i] = 0x00;
-        led_one[3*i+1] = 0x00;
-        led_one[3*i+2] = 0xFF;
-
-    } 
+    
 
 
     uint8_t led_one_red[15] = {
@@ -180,14 +182,6 @@ int app_main(void)
     };
 
 
-    uint8_t led_rgby[15] = {
-    0x00, 0x80, 0x00,  // Green (128), Red (0), Blue (0) - Red
-    0x80, 0x00, 0x00,  // Green (0), Red (128), Blue (0) - Green
-    0x00, 0x00, 0x80,  // Green (0), Red (0), Blue (128) - Blue
-    0x80, 0x80, 0x00,  // Green (128), Red (128), Blue (0) - Yellow
-    0x00, 0x80, 0x80   // Green (128), Red (0), Blue (128) - Cyan
-
-    };
 
     uint8_t led_off[LED_NORTH_CHAIN * 3];
     for (int i = 0; i < LED_NORTH_CHAIN * 3; i++){
@@ -241,7 +235,7 @@ int app_main(void)
 
 
     // Set up Inactivity Detection intterupt on INT2
-    w_trans(WAKEUP_DUR, 0x0F);       // Set inactivity time 
+    w_trans(WAKEUP_DUR, 0x04);       // Set inactivity time 
     w_trans(WAKEUP_THS, 0x08);       // Set inactivity threshold
     w_trans(TAP_CFG0, 0x20);         // Set sleep-change notification
     w_trans(TAP_CFG2, 0xE0);         // Enable interrupt
@@ -251,11 +245,17 @@ int app_main(void)
 
     led_w(led_off);
     led_w(led_one_red);
+
+    gpio_config(&int_conf);
+    gpio_install_isr_service(0);
+    gpio_isr_handler_add(PIN_INT2,gpio_isr_handler, NULL);
+    xTaskCreate(handle_interrupt_task, "handle_interrupt_task", 2048, NULL, 10, NULL);
+    
     sleep(2);
 
     while(1){                                          // Temporary loop to test reading registers and LED states
 
-        
+        /*
         starburst( GYRO_X_LOW, read_burst );            // Get 12 bytes of data from accelerometer and gyroscope
         ESP_LOGI(TAG, "Gyroscope values: X %.3f, Y %.3f, Z %.3f", 
         ( (read_burst[1]  << 8) | read_burst[0]) * GYRO_SENSITIVITY_500DPS - 0.66,
@@ -268,10 +268,10 @@ int app_main(void)
          ((int16_t)((read_burst[9] << 8) | read_burst[8])) * ACCEL_SENSITIVITY_4G,
          ((int16_t)((read_burst[11] << 8) | read_burst[10])) * ACCEL_SENSITIVITY_4G);
 
-
+*/
 
         usleep(BLINK_USEC);
-        
+        //esp_deep_sleep_start();  // Puts processor in deep sleep (essentially restart on wakeup)
 
         
 
@@ -416,12 +416,15 @@ void IRAM_ATTR gpio_isr_handler(void* arg) {
         // Rising edge detected (inactivity detected)
         // Handle inactivity start here
         inactive_detect = true;
-
-    } else {
+        esp_sleep_enable_ext1_wakeup(1ULL << PIN_INT2, 0);
+    } 
+    
+    else {
         // Falling edge detected (activity resumed)
         // Handle activity resumption here
         active_detect = true;
     }
+
     return;
 }
 
@@ -431,14 +434,16 @@ void handle_interrupt_task(void* arg) {
             interrupt_triggered = false;  // Clear the flag
 
             if(inactive_detect){
-                inactive_detect = false;
-                ESP_LOGE(TAG, "Inactive detected");
-                led_w(led_green);
+                if (!first_inact){
+                    first_inact = true;
+                    ESP_LOGE(TAG, "Ignoring first inactivity");
+                }
+                else {
+                    inactivity_sequence();
+                }
             }
             else if (active_detect) {
-                active_detect = false;
-                ESP_LOGE(TAG, "Active detected");
-                led_w(led_red);
+                activity_sequence();
 
             }
             
@@ -447,4 +452,56 @@ void handle_interrupt_task(void* arg) {
         // Short delay to yield CPU time
         vTaskDelay(pdMS_TO_TICKS(10));
     }
+}
+
+
+void led_sequence_task(void* arg) {
+    ESP_LOGE(TAG, "LED sequence task started");
+   for (int i = 0; i < 10; i++) {  // Run while active_detect is true
+        if (led_state) {
+            led_w(led_red); 
+            led_state = !led_state;
+        } else {
+            led_w(led_blue); 
+            led_state = !led_state;
+        }
+        vTaskDelay(pdMS_TO_TICKS(50));  // Yield CPU time
+    }
+    vTaskDelete(NULL);  // Delete the task when done
+}
+
+void activity_sequence() {
+    active_detect = false;
+    ESP_LOGE(TAG, "Active detected");
+    xTaskCreate(led_sequence_task, "LED_Sequence_Task", 2048, NULL, 5, NULL);  // Create a new task for LED sequence
+    return;
+}
+
+void inactivity_sequence(){
+
+    
+    inactive_detect = false;
+    ESP_LOGE(TAG, "Inactive detected");
+    led_w(led_green);
+    starburst( GYRO_X_LOW, read_burst );            // Get 12 bytes of data from accelerometer and gyroscope
+    ESP_LOGW(TAG, "Accelerometer values: X %.3f g, Y %.3f g, Z %.3f g",
+    ((int16_t)((read_burst[7] << 8) | read_burst[6])) * ACCEL_SENSITIVITY_4G,
+    ((int16_t)((read_burst[9] << 8) | read_burst[8])) * ACCEL_SENSITIVITY_4G,
+    ((int16_t)((read_burst[11] << 8) | read_burst[10])) * ACCEL_SENSITIVITY_4G);
+
+    //esp_light_sleep_start();
+
+    // Get accel data x3
+        // Repeat flag?
+    // average
+    // display LED pattern
+    // Case 1 or 20, with default being LED assignment based off roll
+        // Twinkle the LED?
+
+    // Timer/interrupt 20 seconds later to turn off LED
+
+    // TImer/interrupt 2 minutes later for deep sleep
+
+
+    return;
 }
