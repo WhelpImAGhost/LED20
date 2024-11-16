@@ -29,6 +29,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_sleep.h"
 
 
 #include "defines.c"
@@ -41,8 +42,8 @@
 #define PIN_MOSI 18 // MOSI GPIO of host
 #define PIN_SCK 19  // SCK GPIO of host
 #define PIN_CS 17   // CS GPIO of host
-#define PIN_INT1 1  // GPIO Input for interrupt 1
-#define PIN_INT2 2  // GPIO Input for interrupt 2
+#define PIN_INT1 0  // GPIO Input for interrupt 1
+#define PIN_INT2 1  // GPIO Input for interrupt 2
 
 
 // LED Connection and classifications
@@ -54,12 +55,51 @@
 // Sensor classifications and constants
 
 #define SPI_CLOCK_SPEED 8           // SPI transfer speed in MHz
-
+#define ACCEL_SENSITIVITY_4G 0.000122
+#define GYRO_SENSITIVITY_500DPS 0.0175
+#define Z_OFFSET_ACC -0.007
+#define Z_OFFSET_GYRO -178
 
 
 // Testing and debugging
 #define BLINK_USEC  500000
-static uint8_t s_led_state = 0;
+
+
+static bool led_state = false;
+static bool first_inact = false;
+static const char* TAG = "LED20";
+static bool interrupt_triggered = false;
+static bool active_detect = false;
+static bool inactive_detect = false;
+int8_t read_burst[12];
+
+
+// Global LED value 
+uint8_t led_red[15] = {
+    0x00, 0xFF, 0x00,  // Green (128), Red (0), Blue (0) - Red
+    0x00, 0xFF, 0x00,  // Green (0), Red (128), Blue (0) - Green
+    0x00, 0xFF, 0x00,  // Green (0), Red (0), Blue (128) - Blue
+    0x00, 0xFF, 0x00,  // Green (128), Red (128), Blue (0) - Yellow
+    0x00, 0xFF, 0x00   // Green (128), Red (0), Blue (128) - Cyan
+};
+
+uint8_t led_blue[15] = {
+    0x00, 0x00, 0xFF,  // Green (128), Red (0), Blue (0) - Red
+    0x00, 0x00, 0xFF,  // Green (0), Red (128), Blue (0) - Green
+    0x00, 0x00, 0xFF,  // Green (0), Red (0), Blue (128) - Blue
+    0x00, 0x00, 0xFF,  // Green (128), Red (128), Blue (0) - Yellow
+    0x00, 0x00, 0xFF   // Green (128), Red (0), Blue (128) - Cyan
+
+};
+
+uint8_t led_green[15] = {
+    0xFF, 0x00, 0x00,  // Green (128), Red (0), Blue (0) - Red
+    0xFF, 0x00, 0x00,  // Green (0), Red (128), Blue (0) - Green
+    0xFF, 0x00, 0x00,  // Green (0), Red (0), Blue (128) - Blue
+    0xFF, 0x00, 0x00,  // Green (128), Red (128), Blue (0) - Yellow
+    0xFF, 0x00, 0x00   // Green (128), Red (0), Blue (128) - Cyan
+
+};
 
 
 // SPI bus device setup
@@ -98,12 +138,148 @@ rmt_bytes_encoder_config_t bytes_encoder_config = {
 
 
 
+// Function prototypes
+
+void w_trans (uint16_t address, uint16_t data );
+uint8_t r_trans(uint8_t address);
+void r2_trans(uint8_t address, int8_t data[2]);
+void starburst ( uint8_t start_address, int8_t data[12]);
+void led_w(uint8_t *led_data);
+void IRAM_ATTR gpio_isr_handler(void* arg);
+void handle_interrupt_task(void* arg);
+void activity_sequence();
+void inactivity_sequence();
+
+
+int app_main(void)
+{
+    // Local variable declarations
+    esp_err_t spi_error;
+    int8_t z_offset_acc = (int8_t)(Z_OFFSET_ACC * USR_OFFSET_FACTOR+0.5);
+    //int8_t read_temp[2];
+    
+
+    // ISR setup
+
+    gpio_config_t int_conf = {
+        .intr_type = GPIO_INTR_ANYEDGE,
+        .mode = GPIO_MODE_INPUT,
+        .pin_bit_mask = (1ULL << PIN_INT2),
+        .pull_down_en = 0,
+        .pull_up_en = 1,
+    };
+
+    
+
+
+    uint8_t led_one_red[15] = {
+    0x00, 0x00, 0x00,  // Green (128), Red (0), Blue (0) - Red
+    0x00, 0x00, 0x00,  // Green (0), Red (128), Blue (0) - Green
+    0x0, 0x0, 0xFF,  // Green (0), Red (0), Blue (128) - Blue
+    0x00, 0x00, 0x00,  // Green (128), Red (128), Blue (0) - Yellow
+    0x00, 0x00, 0x00   // Green (128), Red (0), Blue (128) - Cyan
+
+    };
 
 
 
+    uint8_t led_off[LED_NORTH_CHAIN * 3];
+    for (int i = 0; i < LED_NORTH_CHAIN * 3; i++){
 
-static const char* TAG = "LED20";
+        led_off[i]=0;
+    }
 
+    // LED RMT setup
+    if (rmt_LED_north) {
+        rmt_del_channel(rmt_LED_north);
+        rmt_LED_north = NULL;   
+    }   
+    ESP_ERROR_CHECK(rmt_new_tx_channel(&rmt_north_config, &rmt_LED_north));
+    ESP_ERROR_CHECK(rmt_new_bytes_encoder(&bytes_encoder_config, &bytes_encoder));
+
+
+    // SPI bus and device setup
+    spi_bus_config_t spi_bus_cfg = {        // configure SPI bus properties and pins
+        .miso_io_num = PIN_MISO,            // Set up IO pins 
+        .mosi_io_num = PIN_MOSI,
+        .sclk_io_num = PIN_SCK,
+        .quadwp_io_num = -1,
+        .quadhd_io_num = -1,
+    };
+
+
+
+    spi_error = spi_bus_initialize(SPI_HOST, &spi_bus_cfg, SPI_DMA_CH_AUTO);
+    ESP_ERROR_CHECK(spi_error);
+
+    spi_error = spi_bus_add_device(SPI2_HOST, &accel_config ,&accel );
+    ESP_ERROR_CHECK(spi_error);
+
+    ESP_LOGD(TAG,"SPI was set up with no errors");
+    
+    uint8_t whoami = r_trans(0x0F);
+    ESP_LOGD(TAG, "Value: 0x%02X", whoami);
+    if (whoami != 0x6C){
+        ESP_LOGE(TAG, "DATA READ FAILURE");
+        return -1;
+    }
+    
+    
+    // Reset and intialize sensors
+    w_trans(CTRL3_C, 0x1);    // Reset the sensor
+    w_trans(CTRL1_XL, 0x92);    // Set the speed and rate of the accel
+    w_trans(CTRL2_G, 0x94);     // Set the speed and rate of the gyro
+    w_trans(CTRL6_C, 0x00);     // Set high performance for accel and xyz offset resolution (2^-10)
+    w_trans(CTRL7_G, 0x02);     // Enable User offsets for low pass filter
+    w_trans(CTRL8_XL, 0x00);    // Set up Low Pass Filter for accel
+
+
+    // Set up Inactivity Detection intterupt on INT2
+    w_trans(WAKEUP_DUR, 0x04);       // Set inactivity time 
+    w_trans(WAKEUP_THS, 0x08);       // Set inactivity threshold
+    w_trans(TAP_CFG0, 0x20);         // Set sleep-change notification
+    w_trans(TAP_CFG2, 0xE0);         // Enable interrupt
+    w_trans(MD2_CFG, 0x80);          // Route interrupt to INT2
+
+    w_trans(Z_OFS_ACC, z_offset_acc); // Set the calculated z offset
+
+    led_w(led_off);
+    led_w(led_one_red);
+
+    gpio_config(&int_conf);
+    gpio_install_isr_service(0);
+    gpio_isr_handler_add(PIN_INT2,gpio_isr_handler, NULL);
+    xTaskCreate(handle_interrupt_task, "handle_interrupt_task", 2048, NULL, 10, NULL);
+    
+    sleep(2);
+
+    while(1){                                          // Temporary loop to test reading registers and LED states
+
+        /*
+        starburst( GYRO_X_LOW, read_burst );            // Get 12 bytes of data from accelerometer and gyroscope
+        ESP_LOGI(TAG, "Gyroscope values: X %.3f, Y %.3f, Z %.3f", 
+        ( (read_burst[1]  << 8) | read_burst[0]) * GYRO_SENSITIVITY_500DPS - 0.66,
+        ( (read_burst[3]  << 8) | read_burst[2]) * GYRO_SENSITIVITY_500DPS - 0.66, 
+        ( (read_burst[5]  << 8) | read_burst[4]) * GYRO_SENSITIVITY_500DPS + 3.10);
+
+
+        ESP_LOGI(TAG, "Accelerometer values: X %.3f g, Y %.3f g, Z %.3f g",
+         ((int16_t)((read_burst[7] << 8) | read_burst[6])) * ACCEL_SENSITIVITY_4G,
+         ((int16_t)((read_burst[9] << 8) | read_burst[8])) * ACCEL_SENSITIVITY_4G,
+         ((int16_t)((read_burst[11] << 8) | read_burst[10])) * ACCEL_SENSITIVITY_4G);
+
+*/
+
+        usleep(BLINK_USEC);
+        //esp_deep_sleep_start();  // Puts processor in deep sleep (essentially restart on wakeup)
+
+        
+
+
+    }
+    return 0;
+    
+}
 
 void w_trans (uint16_t address, uint16_t data ){
     
@@ -122,27 +298,6 @@ void w_trans (uint16_t address, uint16_t data ){
 
     return;
 
-}
-
-uint8_t r_int(){
-
-
-    spi_transaction_t transfer = {0};
-    esp_err_t err;
-    transfer.length = 8;
-    transfer.rxlength = 8;
-    transfer.flags = SPI_TRANS_USE_RXDATA;  
-    transfer.cmd = (0x35 | 0x80) ;
-    ESP_LOGD(TAG, "Attempting to read Interrupt Status Register ");
-
-    err = spi_device_transmit(accel, &transfer);
-    ESP_ERROR_CHECK(err);
-
-
-    return transfer.rx_data[0];
-
-
-    
 }
 
 uint8_t r_trans(uint8_t address){
@@ -185,8 +340,6 @@ void r2_trans(uint8_t address, int8_t data[2]){
 
     
 }
-
-
 
 void starburst ( uint8_t start_address, int8_t data[12]){     // A function to burst read 12 consecutive data segments
 
@@ -239,157 +392,116 @@ void starburst ( uint8_t start_address, int8_t data[12]){     // A function to b
 
 void led_w(uint8_t *led_data){
     
-     ESP_ERROR_CHECK (rmt_enable( rmt_LED_north));
+    ESP_ERROR_CHECK (rmt_enable( rmt_LED_north));
 
     ESP_LOGD(TAG, "Setting up LED write");
     rmt_transmit_config_t led_tx = {
         .loop_count = 0  // No looping
     };
+
     ESP_LOGD(TAG, "Attempting LED write");
     ESP_ERROR_CHECK(rmt_transmit(rmt_LED_north, bytes_encoder, led_data, LED_NORTH_CHAIN * 3, &led_tx));
     ESP_ERROR_CHECK(rmt_tx_wait_all_done(rmt_LED_north, portMAX_DELAY));
-
     ESP_ERROR_CHECK (rmt_disable( rmt_LED_north));
 
     return;
 }
 
+void IRAM_ATTR gpio_isr_handler(void* arg) {
+    // Check the level of the GPIO to determine edge
+    interrupt_triggered = true;
+    int level = gpio_get_level(PIN_INT2);
 
-int app_main(void)
-{
-    // Local variable declarations
-    esp_err_t spi_error;
-    //int8_t read_temp[2];
-    int8_t read_burst[12];
-
-
-    uint8_t led_one[5 * 3] = {
-    0x00, 0x00, 0x00,  // Green (128), Red (0), Blue (0) - Red
-    0x00, 0x00, 0x00,  // Green (0), Red (128), Blue (0) - Green
-    0x00, 0x00, 0x80,  // Green (0), Red (0), Blue (128) - Blue
-    0x00, 0x00, 0x00,  // Green (128), Red (128), Blue (0) - Yellow
-    0x00, 0x00, 0x00   // Green (128), Red (0), Blue (128) - Cyan
-};
-
-    uint8_t led_rgby[15] = {
-    0x00, 0x80, 0x00,  // Green (128), Red (0), Blue (0) - Red
-    0x80, 0x00, 0x00,  // Green (0), Red (128), Blue (0) - Green
-    0x00, 0x00, 0x80,  // Green (0), Red (0), Blue (128) - Blue
-    0x80, 0x80, 0x00,  // Green (128), Red (128), Blue (0) - Yellow
-    0x00, 0x80, 0x80   // Green (128), Red (0), Blue (128) - Cyan
-
-    };
-
-    uint8_t led_off[LED_NORTH_CHAIN * 3];
-    for (int i = 0; i < LED_NORTH_CHAIN * 3; i++){
-
-        led_off[i]=0;
+    if (level == 1) {
+        // Rising edge detected (inactivity detected)
+        // Handle inactivity start here
+        inactive_detect = true;
+        esp_sleep_enable_ext1_wakeup(1ULL << PIN_INT2, 0);
+    } 
+    
+    else {
+        // Falling edge detected (activity resumed)
+        // Handle activity resumption here
+        active_detect = true;
     }
 
-    // LED RMT setup
+    return;
+}
 
-   
+void handle_interrupt_task(void* arg) {
+    while (1) {
+        if (interrupt_triggered) {
+            interrupt_triggered = false;  // Clear the flag
 
-    if (rmt_LED_north) {
-        rmt_del_channel(rmt_LED_north);
-        rmt_LED_north = NULL;   
-    }   
+            if(inactive_detect){
+                if (!first_inact){
+                    first_inact = true;
+                    ESP_LOGE(TAG, "Ignoring first inactivity");
+                }
+                else {
+                    inactivity_sequence();
+                }
+            }
+            else if (active_detect) {
+                activity_sequence();
 
-
-    ESP_ERROR_CHECK( rmt_new_tx_channel(&rmt_north_config, &rmt_LED_north));
-   
-
-    ESP_ERROR_CHECK(rmt_new_bytes_encoder(&bytes_encoder_config, &bytes_encoder));
-
-
-    
-    
-
-    
-
-    // SPI bus and device setup
-    spi_bus_config_t spi_bus_cfg = {        // configure SPI bus properties and pins
-
-        .miso_io_num = PIN_MISO,            // Set up IO pins 
-        .mosi_io_num = PIN_MOSI,
-        .sclk_io_num = PIN_SCK,
-        .quadwp_io_num = -1,
-        .quadhd_io_num = -1,
-
-    };
-
-
-
-    spi_error = spi_bus_initialize(SPI_HOST, &spi_bus_cfg, SPI_DMA_CH_AUTO);
-    ESP_ERROR_CHECK(spi_error);
-
-    spi_error = spi_bus_add_device(SPI2_HOST, &accel_config ,&accel );
-    ESP_ERROR_CHECK(spi_error);
-
-    ESP_LOGD(TAG,"SPI was set up with no errors");
-    
-    uint8_t whoami = r_trans(0x0F);
-    ESP_LOGD(TAG, "Value: 0x%02X", whoami);
-    if (whoami != 0x6C){
-        ESP_LOGE(TAG, "DATA READ FAILURE");
-        return -1;
-    }
-    
-    
-    // Reset and intialize sensors
-    w_trans(CTRL3_C, 0x1);    // Reset the sensor
-    w_trans(CTRL1_XL, 0xA4);    // Set the speed and rate of the accel
-    w_trans(CTRL2_G, 0xAC);     // Set the speed and rate of the gyro
-    
-    // Set up Significant Motion Detection interrupt on INT1
-    w_trans(FUNC_CFG_ACCESS, 0x80);  // Access embedded functions
-    w_trans(EMB_FUNC_EN_A, 0x20);    // Enable SMD interrupt
-    w_trans(EMB_FUNC_INT1, 0x20);    // Route SMD to INT1
-    w_trans(PAGE_RW, 0x80);          // Latching interrupts enable
-    w_trans(FUNC_CFG_ACCESS, 0x00);  // Return to control registers
-    w_trans(MD1_CFG, 0x02);             // Set INT1_EMB_FUNC in MD1_CFG
-
-    // Set up Inactivity Detection intterupt on INT2
-    w_trans(WAKEUP_DUR, 0x02);       // Set inactivity time 
-    w_trans(WAKEUP_THS, 0x01);       // Set inactivity threshold
-    w_trans(TAP_CFG0, 0x00);         // Set sleep-change notification
-    w_trans(TAP_CFG2, 0xE0);         // Enable interrupt
-    w_trans(MD2_CFG, 0x80);          // Route interrupt to INT2
-
-
-    led_w(led_one);
-    sleep(1);
-    led_w(led_off);
-    sleep(1);
-    led_w(led_rgby);
-    sleep(3);
-    led_w(led_off);
-
-    while(1){                                          // Temporary loop to test reading registers and LED states
-
-        
-        starburst( GYRO_X_LOW, read_burst );            // Get 12 bytes of data from accelerometer and gyroscope
-        ESP_LOGI(TAG, "Gyroscope values: X %d, Y %d, Z %d", (read_burst[1]  << 8) | read_burst[0] , (read_burst[3]  << 8) | read_burst[2], (read_burst[5]  << 8) | read_burst[4] );
-        ESP_LOGI(TAG, "Accelerometer values: X %d, Y %d, Z %d", (read_burst[7]  << 8) | read_burst[6] , (read_burst[9]  << 8) | read_burst[8], (read_burst[11]  << 8) | read_burst[10] );
-
-        if (s_led_state) {
+            }
             
-            led_w(led_off);
-            s_led_state = !s_led_state;
-
         }
-        else{
-            led_w(led_rgby);
-            s_led_state = !s_led_state;
-        } 
-
-        usleep(BLINK_USEC);
         
-
-        
-
-
+        // Short delay to yield CPU time
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
-    return 0;
+}
+
+
+void led_sequence_task(void* arg) {
+    ESP_LOGE(TAG, "LED sequence task started");
+   for (int i = 0; i < 10; i++) {  // Run while active_detect is true
+        if (led_state) {
+            led_w(led_red); 
+            led_state = !led_state;
+        } else {
+            led_w(led_blue); 
+            led_state = !led_state;
+        }
+        vTaskDelay(pdMS_TO_TICKS(50));  // Yield CPU time
+    }
+    vTaskDelete(NULL);  // Delete the task when done
+}
+
+void activity_sequence() {
+    active_detect = false;
+    ESP_LOGE(TAG, "Active detected");
+    xTaskCreate(led_sequence_task, "LED_Sequence_Task", 2048, NULL, 5, NULL);  // Create a new task for LED sequence
+    return;
+}
+
+void inactivity_sequence(){
+
     
+    inactive_detect = false;
+    ESP_LOGE(TAG, "Inactive detected");
+    led_w(led_green);
+    starburst( GYRO_X_LOW, read_burst );            // Get 12 bytes of data from accelerometer and gyroscope
+    ESP_LOGW(TAG, "Accelerometer values: X %.3f g, Y %.3f g, Z %.3f g",
+    ((int16_t)((read_burst[7] << 8) | read_burst[6])) * ACCEL_SENSITIVITY_4G,
+    ((int16_t)((read_burst[9] << 8) | read_burst[8])) * ACCEL_SENSITIVITY_4G,
+    ((int16_t)((read_burst[11] << 8) | read_burst[10])) * ACCEL_SENSITIVITY_4G);
+
+    //esp_light_sleep_start();
+
+    // Get accel data x3
+        // Repeat flag?
+    // average
+    // display LED pattern
+    // Case 1 or 20, with default being LED assignment based off roll
+        // Twinkle the LED?
+
+    // Timer/interrupt 20 seconds later to turn off LED
+
+    // TImer/interrupt 2 minutes later for deep sleep
+
+
+    return;
 }

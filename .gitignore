@@ -60,3 +60,4 @@ dkms.conf
 !/LED20_Code/main/idf_component.yml
 /LED20_Code/build
 /LED20_Code/main/build
+/build
