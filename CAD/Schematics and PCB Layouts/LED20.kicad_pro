@@ -37,9 +37,9 @@
         "other_text_thickness": 0.15,
         "other_text_upright": false,
         "pads": {
-          "drill": 0.762,
-          "height": 1.524,
-          "width": 1.524
+          "drill": 0.0,
+          "height": 1.0,
+          "width": 1.0
         },
         "silk_line_width": 0.1,
         "silk_text_italic": false,
@@ -216,12 +216,7 @@
     "equivalence_files": []
   },
   "erc": {
-    "erc_exclusions": [
-      "no_connect_connected|749300|1524000|6d4a8f9c-7ee0-49a4-b256-e245f91f44e7|6255105e-a560-45e5-b659-4510f7857f5e|/967d5e27-871e-4805-83b6-90b8321a7dbd|/967d5e27-871e-4805-83b6-90b8321a7dbd|",
-      "no_connect_connected|749300|1574800|0ce7595f-2a75-4a53-8068-5cc6912aa65c|e3d6a9d8-1336-4007-a1d7-021588092f64|/967d5e27-871e-4805-83b6-90b8321a7dbd|/967d5e27-871e-4805-83b6-90b8321a7dbd|",
-      "no_connect_connected|749300|1676400|d6e60c08-3281-4fa4-b842-83cbf3901267|b1aad0a1-25c6-40a6-88a7-c633273cd17b|/967d5e27-871e-4805-83b6-90b8321a7dbd|/967d5e27-871e-4805-83b6-90b8321a7dbd|",
-      "no_connect_connected|800100|1625600|c9a02ea9-befc-42db-82e0-52c20fd39df2|85c59d3a-43c6-4434-a901-f8393545aba2|/967d5e27-871e-4805-83b6-90b8321a7dbd|/967d5e27-871e-4805-83b6-90b8321a7dbd|"
-    ],
+    "erc_exclusions": [],
     "meta": {
       "version": 0
     },
@@ -436,7 +431,7 @@
     "pinned_symbol_libs": []
   },
   "meta": {
-    "filename": "led20_preliminary_layout_11_6_24.kicad_pro",
+    "filename": "LED20.kicad_pro",
     "version": 1
   },
   "net_settings": {
@@ -471,7 +466,7 @@
       "gencad": "",
       "idf": "",
       "netlist": "",
-      "plot": "",
+      "plot": "./",
       "pos_files": "",
       "specctra_dsn": "",
       "step": "",
@@ -581,7 +576,7 @@
     },
     "net_format_name": "",
     "page_layout_descr_file": "",
-    "plot_directory": "",
+    "plot_directory": "./",
     "spice_current_sheet_as_root": false,
     "spice_external_command": "spice \"%I\"",
     "spice_model_current_sheet_as_root": true,
