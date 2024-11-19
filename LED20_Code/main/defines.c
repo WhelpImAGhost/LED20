@@ -11,9 +11,11 @@
 #include <stdlib.h>
 
 #define FUNC_CFG_ACCESS 0x01
+#define INT1_CTRL 0x0D
 #define CTRL1_XL 0x10
 #define CTRL2_G 0x11
 #define CTRL3_C 0x12
+#define CTRL4_C 0x13
 #define CTRL6_C 0x15
 #define CTRL7_G 0x16
 #define CTRL8_XL 0x17
@@ -39,12 +41,6 @@
 
 // Data storage registers
 #define GYRO_X_LOW 0x22
-
-/*  The rest of these do not need to be defined, 
-    as incremental register reading takes care
-    of reading all 12 addresses.
-
-
 #define GYRO_X_HGIH 0x23
 #define GYRO_Y_LOW 0x24
 #define GYRO_Y_HIGH 0x25
@@ -57,7 +53,7 @@
 #define ACCEL_Y_HIGH 0x2B
 #define ACCEL_Z_LOW 0x2C
 #define ACCEL_Z_HIGH 0x2D
-*/
+
 
 #define TEMP_LOW 0x20
 #define TEMP_HIGH 0x21

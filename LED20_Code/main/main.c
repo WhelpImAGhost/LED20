@@ -64,42 +64,28 @@
 // Testing and debugging
 #define BLINK_USEC  500000
 
-
-static bool led_state = false;
 static bool first_inact = false;
 static const char* TAG = "LED20";
 static bool interrupt_triggered = false;
 static bool active_detect = false;
 static bool inactive_detect = false;
 int8_t read_burst[12];
+int8_t accel_temp_burst[8];
 
 
 // Global LED value 
-uint8_t led_red[15] = {
-    0x00, 0xFF, 0x00,  // Green (128), Red (0), Blue (0) - Red
-    0x00, 0xFF, 0x00,  // Green (0), Red (128), Blue (0) - Green
-    0x00, 0xFF, 0x00,  // Green (0), Red (0), Blue (128) - Blue
-    0x00, 0xFF, 0x00,  // Green (128), Red (128), Blue (0) - Yellow
-    0x00, 0xFF, 0x00   // Green (128), Red (0), Blue (128) - Cyan
-};
+uint8_t led_red[LED_NORTH_CHAIN * 3];
 
-uint8_t led_blue[15] = {
-    0x00, 0x00, 0xFF,  // Green (128), Red (0), Blue (0) - Red
-    0x00, 0x00, 0xFF,  // Green (0), Red (128), Blue (0) - Green
-    0x00, 0x00, 0xFF,  // Green (0), Red (0), Blue (128) - Blue
-    0x00, 0x00, 0xFF,  // Green (128), Red (128), Blue (0) - Yellow
-    0x00, 0x00, 0xFF   // Green (128), Red (0), Blue (128) - Cyan
+uint8_t led_purple[15] = {
+    0x00, 0xFF, 0xFF,  // Green (128), Red (0), Blue (0) - Red
+    0x00, 0xFF, 0xFF,  // Green (0), Red (128), Blue (0) - Green
+    0x00, 0xFF, 0xFF,  // Green (0), Red (0), Blue (128) - Blue
+    0x00, 0xFF, 0xFF,  // Green (128), Red (128), Blue (0) - Yellow
+    0x00, 0xFF, 0xFF   // Green (128), Red (0), Blue (128) - Cyan
 
 };
 
-uint8_t led_green[15] = {
-    0xFF, 0x00, 0x00,  // Green (128), Red (0), Blue (0) - Red
-    0xFF, 0x00, 0x00,  // Green (0), Red (128), Blue (0) - Green
-    0xFF, 0x00, 0x00,  // Green (0), Red (0), Blue (128) - Blue
-    0xFF, 0x00, 0x00,  // Green (128), Red (128), Blue (0) - Yellow
-    0xFF, 0x00, 0x00   // Green (128), Red (0), Blue (128) - Cyan
-
-};
+uint8_t led_off[LED_NORTH_CHAIN * 3];
 
 
 // SPI bus device setup
@@ -142,8 +128,6 @@ rmt_bytes_encoder_config_t bytes_encoder_config = {
 
 void w_trans (uint16_t address, uint16_t data );
 uint8_t r_trans(uint8_t address);
-void r2_trans(uint8_t address, int8_t data[2]);
-void starburst ( uint8_t start_address, int8_t data[12]);
 void led_w(uint8_t *led_data);
 void IRAM_ATTR gpio_isr_handler(void* arg);
 void handle_interrupt_task(void* arg);
@@ -154,13 +138,11 @@ void inactivity_sequence();
 int app_main(void)
 {
     // Local variable declarations
-    esp_err_t spi_error;
     int8_t z_offset_acc = (int8_t)(Z_OFFSET_ACC * USR_OFFSET_FACTOR+0.5);
-    //int8_t read_temp[2];
+
     
 
     // ISR setup
-
     gpio_config_t int_conf = {
         .intr_type = GPIO_INTR_ANYEDGE,
         .mode = GPIO_MODE_INPUT,
@@ -170,23 +152,18 @@ int app_main(void)
     };
 
     
-
-
-    uint8_t led_one_red[15] = {
-    0x00, 0x00, 0x00,  // Green (128), Red (0), Blue (0) - Red
-    0x00, 0x00, 0x00,  // Green (0), Red (128), Blue (0) - Green
-    0x0, 0x0, 0xFF,  // Green (0), Red (0), Blue (128) - Blue
-    0x00, 0x00, 0x00,  // Green (128), Red (128), Blue (0) - Yellow
-    0x00, 0x00, 0x00   // Green (128), Red (0), Blue (128) - Cyan
-
-    };
-
-
-
-    uint8_t led_off[LED_NORTH_CHAIN * 3];
+    
+    // Off LED setup
     for (int i = 0; i < LED_NORTH_CHAIN * 3; i++){
-
         led_off[i]=0;
+    }
+
+    // Red LED setup
+    for (int i = 0; i < LED_NORTH_CHAIN; i++){
+
+        led_red[3*i]   = 0x00;
+        led_red[3*i+1] = 0xFF;
+        led_red[3*i+2] = 0x00;
     }
 
     // LED RMT setup
@@ -209,23 +186,22 @@ int app_main(void)
 
 
 
-    spi_error = spi_bus_initialize(SPI_HOST, &spi_bus_cfg, SPI_DMA_CH_AUTO);
-    ESP_ERROR_CHECK(spi_error);
+    ESP_ERROR_CHECK(spi_bus_initialize(SPI_HOST, &spi_bus_cfg, SPI_DMA_CH_AUTO));
+    
 
-    spi_error = spi_bus_add_device(SPI2_HOST, &accel_config ,&accel );
-    ESP_ERROR_CHECK(spi_error);
-
-    ESP_LOGD(TAG,"SPI was set up with no errors");
+    ESP_ERROR_CHECK(spi_bus_add_device(SPI2_HOST, &accel_config ,&accel ));
+    ESP_LOGD("SETUP","SPI was set up with no errors");
     
     uint8_t whoami = r_trans(0x0F);
-    ESP_LOGD(TAG, "Value: 0x%02X", whoami);
+    ESP_LOGD("WHOAMI", "Value: 0x%02X", whoami);
     if (whoami != 0x6C){
-        ESP_LOGE(TAG, "DATA READ FAILURE");
+        ESP_LOGE("WHOAMI", "DATA READ FAILURE");
         return -1;
     }
     
     
     // Reset and intialize sensors
+    ESP_LOGD("SETUP","Initializing Accel and Gyro");
     w_trans(CTRL3_C, 0x1);    // Reset the sensor
     w_trans(CTRL1_XL, 0x92);    // Set the speed and rate of the accel
     w_trans(CTRL2_G, 0x94);     // Set the speed and rate of the gyro
@@ -233,50 +209,31 @@ int app_main(void)
     w_trans(CTRL7_G, 0x02);     // Enable User offsets for low pass filter
     w_trans(CTRL8_XL, 0x00);    // Set up Low Pass Filter for accel
 
-
+    ESP_LOGD("SETUP","Initializing interrupt detection for Activity/Inactivity");
     // Set up Inactivity Detection intterupt on INT2
     w_trans(WAKEUP_DUR, 0x04);       // Set inactivity time 
-    w_trans(WAKEUP_THS, 0x08);       // Set inactivity threshold
+    w_trans(WAKEUP_THS, 0x01);       // Set inactivity threshold
     w_trans(TAP_CFG0, 0x20);         // Set sleep-change notification
     w_trans(TAP_CFG2, 0xE0);         // Enable interrupt
     w_trans(MD2_CFG, 0x80);          // Route interrupt to INT2
-
     w_trans(Z_OFS_ACC, z_offset_acc); // Set the calculated z offset
 
-    led_w(led_off);
-    led_w(led_one_red);
+    led_w(led_red);
 
+    ESP_LOGD("SETUP","Activating interrupt handling for Activity/Inactivity interrupts");
     gpio_config(&int_conf);
     gpio_install_isr_service(0);
     gpio_isr_handler_add(PIN_INT2,gpio_isr_handler, NULL);
     xTaskCreate(handle_interrupt_task, "handle_interrupt_task", 2048, NULL, 10, NULL);
     
-    sleep(2);
+    ESP_LOGD("SETUP","Setup complete!");
 
-    while(1){                                          // Temporary loop to test reading registers and LED states
-
-        /*
-        starburst( GYRO_X_LOW, read_burst );            // Get 12 bytes of data from accelerometer and gyroscope
-        ESP_LOGI(TAG, "Gyroscope values: X %.3f, Y %.3f, Z %.3f", 
-        ( (read_burst[1]  << 8) | read_burst[0]) * GYRO_SENSITIVITY_500DPS - 0.66,
-        ( (read_burst[3]  << 8) | read_burst[2]) * GYRO_SENSITIVITY_500DPS - 0.66, 
-        ( (read_burst[5]  << 8) | read_burst[4]) * GYRO_SENSITIVITY_500DPS + 3.10);
-
-
-        ESP_LOGI(TAG, "Accelerometer values: X %.3f g, Y %.3f g, Z %.3f g",
-         ((int16_t)((read_burst[7] << 8) | read_burst[6])) * ACCEL_SENSITIVITY_4G,
-         ((int16_t)((read_burst[9] << 8) | read_burst[8])) * ACCEL_SENSITIVITY_4G,
-         ((int16_t)((read_burst[11] << 8) | read_burst[10])) * ACCEL_SENSITIVITY_4G);
-
-*/
+    while(1){
 
         usleep(BLINK_USEC);
-        //esp_deep_sleep_start();  // Puts processor in deep sleep (essentially restart on wakeup)
-
-        
-
-
+       
     }
+
     return 0;
     
 }
@@ -286,122 +243,110 @@ void w_trans (uint16_t address, uint16_t data ){
     spi_transaction_t transfer = { 0 };
     
     transfer.length = 8;
-    ESP_LOGD(TAG, "Setting flags");
+    ESP_LOGD("WRITE_TRANS", "Setting flags");
     transfer.flags = SPI_TRANS_USE_TXDATA;
-    ESP_LOGD(TAG, "Setting address");   
+    ESP_LOGD("WRITE_TRANS", "Setting address");   
     transfer.cmd = address;
-    ESP_LOGD(TAG, "Setting data");
+    ESP_LOGD("WRITE_TRANS", "Setting data");
     transfer.tx_data[0] = data;
-    ESP_LOGD(TAG, "Attempting write at address 0x%02X", address);
-    ESP_ERROR_CHECK( spi_device_transmit(accel, &transfer) );
-    ESP_LOGD(TAG, "Write at address 0x%02X completed", address);
+    ESP_LOGD("WRITE_TRANS", "Attempting write at address 0x%02X", address);
+    ESP_ERROR_CHECK(spi_device_transmit(accel, &transfer) );
+    ESP_LOGD("WRITE_TRANS", "Write at address 0x%02X completed", address);
 
     return;
 
 }
-
+ 
 uint8_t r_trans(uint8_t address){
 
     spi_transaction_t transfer = {0};
-    esp_err_t err;
     transfer.length = 8;
     transfer.rxlength = 8;
-    ESP_LOGD(TAG, "Setting flags");
+    ESP_LOGD("READ_TRANS", "Setting flags");
     transfer.flags = SPI_TRANS_USE_RXDATA;
-    ESP_LOGD(TAG, "Setting address");   
+    ESP_LOGD("READ_TRANS", "Setting address");   
     transfer.cmd = (address | 0x80) ;
-    ESP_LOGD(TAG, "Attempting read at address 0x%02x", address);
+    ESP_LOGD("READ_TRANS", "Attempting read at address 0x%02x", address);
+    ESP_ERROR_CHECK(spi_device_transmit(accel, &transfer));
 
-    err = spi_device_transmit(accel, &transfer);
-    ESP_ERROR_CHECK(err);
+    ESP_LOGD("READ_TRANS", "Read at address 0x%02X completed", address);
+
     return transfer.rx_data[0];
 
 }
 
-void r2_trans(uint8_t address, int8_t data[2]){
 
-    spi_transaction_t transfer = {0};
-    esp_err_t err;
-    transfer.length = 16;
-    transfer.rxlength = 16;
-    ESP_LOGD(TAG, "Setting flags");
-    transfer.flags = SPI_TRANS_USE_RXDATA;
-    ESP_LOGD(TAG, "Setting address");   
-    transfer.cmd = (address | 0x80) ;
-    ESP_LOGD(TAG, "Attempting read at address 0x%02X and 0x%02x", address, address + 0x1);
+void r_accel(){
 
-    err = spi_device_transmit(accel, &transfer);
-    ESP_ERROR_CHECK(err);
+    spi_transaction_t trans[3] = {};
+    spi_transaction_t *receive[3] = {};
 
-    data[0] = transfer.rx_data[0];
-    data[1] = transfer.rx_data[1];
+    ESP_LOGD("ACCEL_READ", "Setting up read transaction 0");
+    trans[0].length = 32;                                   // Each transaction has a length of 4 bytes (32 bits)
+    trans[0].rxlength = 32;                                 
+    trans[0].cmd = ( ACCEL_X_LOW  | 0x80 );                 // Increment starting addres by 4 each iteration
+    trans[0].flags = SPI_TRANS_USE_RXDATA;                  // Use rx_data until DMA access becomes necessary
+    trans[0].rx_buffer = NULL;
+    trans[0].tx_buffer = NULL;
+    ESP_LOGD("ACCEL_READ", "Queueing read transaction 0");
+    ESP_ERROR_CHECK(spi_device_queue_trans(accel, &trans[0], portMAX_DELAY));
+
+
+    ESP_LOGD("ACCEL_READ", "Setting up read transaction 1");
+    trans[1].length = 16;
+    trans[1].rxlength = 16;
+    trans[1].cmd = (ACCEL_Z_LOW | 0x80);
+    trans[1].flags = SPI_TRANS_USE_RXDATA;
+    trans[1].rx_buffer = NULL;
+    trans[1].tx_buffer = NULL;
+    ESP_LOGD("ACCEL_READ", "Queueing read transaction 1");
+    ESP_ERROR_CHECK(spi_device_queue_trans(accel, &trans[1], portMAX_DELAY));
+
+
+    ESP_LOGD("ACCEL_READ", "Setting up read transaction 2");
+    trans[2].length = 16;
+    trans[2].rxlength = 16;
+    trans[2].cmd = (TEMP_LOW | 0x80);
+    trans[2].flags = SPI_TRANS_USE_RXDATA;
+    trans[2].rx_buffer = NULL;
+    trans[2].tx_buffer = NULL;
+    ESP_LOGD("ACCEL_READ", "Queueing read transaction 2");
+    ESP_ERROR_CHECK(spi_device_queue_trans(accel, &trans[2], portMAX_DELAY));
+
+    ESP_LOGD("ACCEL_READ", "Receiving data from read transaction 0");
+    ESP_ERROR_CHECK(spi_device_get_trans_result(accel, &receive[0],portMAX_DELAY));
+    ESP_LOGD("ACCEL_READ", "Receiving data from read transaction 1");
+    ESP_ERROR_CHECK(spi_device_get_trans_result(accel, &receive[1],portMAX_DELAY));
+    ESP_LOGD("ACCEL_READ", "Receiving data from read transaction 2");
+    ESP_ERROR_CHECK(spi_device_get_trans_result(accel, &receive[2],portMAX_DELAY));
+
+    ESP_LOGD("ACCEL_READ", "Transferring data from read transactions");
+    accel_temp_burst[0] = receive[0]->rx_data[0];
+    accel_temp_burst[1] = receive[0]->rx_data[1];
+    accel_temp_burst[2] = receive[0]->rx_data[2];
+    accel_temp_burst[3] = receive[0]->rx_data[3];
+    accel_temp_burst[4] = receive[1]->rx_data[0];
+    accel_temp_burst[5] = receive[1]->rx_data[1];
+    accel_temp_burst[6] = receive[2]->rx_data[0];
+    accel_temp_burst[7] = receive[2]->rx_data[1];
+
+    ESP_LOGD("ACCEL_READ", "Transaction complete");
     return;
-
-
-    
-}
-
-void starburst ( uint8_t start_address, int8_t data[12]){     // A function to burst read 12 consecutive data segments
-
-    spi_transaction_t trans[3];                                 // Set up 3 transactions of 4 bytes
-    esp_err_t error;
-
-
-    for (int i = 0; i < 3; i++){
-
-
-        trans[i].length = 32;                                   // Each transaction has a length of 4 bytes
-        trans[i].rxlength = 32;                                 
-        trans[i].cmd = ( (start_address + (i*4)) | 0x80 );      // Increment starting addres by 4 each iteration
-        trans[i].flags = SPI_TRANS_USE_RXDATA;                  // Use rx_data until DMA access becomes necessary
-        trans[i].rx_buffer = NULL;
-        trans[i].tx_buffer = NULL;
-
-        ESP_LOGD(TAG, "Queued transaction at address 0x%02X",   // Queue 4 byte burst
-        start_address + 4*i );
-
-        error = spi_device_queue_trans(accel, &trans[i], portMAX_DELAY);
-        ESP_ERROR_CHECK(error);
-
-
-
-    }
-
-    for (int i = 0; i < 3; i++){
-
-        spi_transaction_t *receive;
-
-        error = spi_device_get_trans_result(accel, &receive,    // Run all queued transactions
-         portMAX_DELAY);
-        ESP_ERROR_CHECK(error);
-
-        data[4*i] = receive->rx_data[0];                        // Write gathered data to array
-        data[4*i+1] = receive->rx_data[1];
-        data[4*i+2] = receive->rx_data[2];
-        data[4*i+3] = receive->rx_data[3];
-        ESP_LOGD(TAG, "Gathered data from transaction at address 0x%02X", start_address + 4*i);
-
-
-
-
-    }
-    return;
-
-
 }
 
 void led_w(uint8_t *led_data){
     
     ESP_ERROR_CHECK (rmt_enable( rmt_LED_north));
 
-    ESP_LOGD(TAG, "Setting up LED write");
+    ESP_LOGD("LEDW", "Setting up LED write");
     rmt_transmit_config_t led_tx = {
         .loop_count = 0  // No looping
     };
 
-    ESP_LOGD(TAG, "Attempting LED write");
+    ESP_LOGD("LEDW", "Attempting LED write");
     ESP_ERROR_CHECK(rmt_transmit(rmt_LED_north, bytes_encoder, led_data, LED_NORTH_CHAIN * 3, &led_tx));
     ESP_ERROR_CHECK(rmt_tx_wait_all_done(rmt_LED_north, portMAX_DELAY));
+    ESP_LOGD("LEDW", "LED write completed");
     ESP_ERROR_CHECK (rmt_disable( rmt_LED_north));
 
     return;
@@ -436,13 +381,15 @@ void handle_interrupt_task(void* arg) {
             if(inactive_detect){
                 if (!first_inact){
                     first_inact = true;
-                    ESP_LOGE(TAG, "Ignoring first inactivity");
+                    ESP_LOGD("HANDLER", "Ignoring first inactivity");
                 }
                 else {
+                    ESP_LOGD("HANDLER", "Running inactivity sequence");
                     inactivity_sequence();
                 }
             }
             else if (active_detect) {
+                ESP_LOGD("HANDLER", "Running activity sequence");
                 activity_sequence();
 
             }
@@ -455,25 +402,15 @@ void handle_interrupt_task(void* arg) {
 }
 
 
-void led_sequence_task(void* arg) {
-    ESP_LOGE(TAG, "LED sequence task started");
-   for (int i = 0; i < 10; i++) {  // Run while active_detect is true
-        if (led_state) {
-            led_w(led_red); 
-            led_state = !led_state;
-        } else {
-            led_w(led_blue); 
-            led_state = !led_state;
-        }
-        vTaskDelay(pdMS_TO_TICKS(50));  // Yield CPU time
-    }
-    vTaskDelete(NULL);  // Delete the task when done
-}
 
 void activity_sequence() {
     active_detect = false;
-    ESP_LOGE(TAG, "Active detected");
-    xTaskCreate(led_sequence_task, "LED_Sequence_Task", 2048, NULL, 5, NULL);  // Create a new task for LED sequence
+    ESP_LOGD("ACTIVE", "Active detected");
+    while(!inactive_detect){
+        ESP_LOGD("ACTIVE", "In while loop");
+        led_w(led_red);
+        vTaskDelay(pdMS_TO_TICKS(1));
+    }
     return;
 }
 
@@ -481,15 +418,14 @@ void inactivity_sequence(){
 
     
     inactive_detect = false;
-    ESP_LOGE(TAG, "Inactive detected");
-    led_w(led_green);
-    starburst( GYRO_X_LOW, read_burst );            // Get 12 bytes of data from accelerometer and gyroscope
-    ESP_LOGW(TAG, "Accelerometer values: X %.3f g, Y %.3f g, Z %.3f g",
-    ((int16_t)((read_burst[7] << 8) | read_burst[6])) * ACCEL_SENSITIVITY_4G,
-    ((int16_t)((read_burst[9] << 8) | read_burst[8])) * ACCEL_SENSITIVITY_4G,
-    ((int16_t)((read_burst[11] << 8) | read_burst[10])) * ACCEL_SENSITIVITY_4G);
+    ESP_LOGD("INACTIVE", "Inactive detected");
+    led_w(led_off);
+    r_accel();        
+    ESP_LOGI("INACTIVE", "Accelerometer values: X %.3f g, Y %.3f g, Z %.3f g",
+    ((int16_t)((accel_temp_burst[1] << 8) | accel_temp_burst[0])) * ACCEL_SENSITIVITY_4G,
+    ((int16_t)((accel_temp_burst[3] << 8) | accel_temp_burst[2])) * ACCEL_SENSITIVITY_4G,
+    ((int16_t)((accel_temp_burst[5] << 8) | accel_temp_burst[4])) * ACCEL_SENSITIVITY_4G);
 
-    //esp_light_sleep_start();
 
     // Get accel data x3
         // Repeat flag?
@@ -505,3 +441,4 @@ void inactivity_sequence(){
 
     return;
 }
+
