@@ -54,23 +54,25 @@
 
 // Sensor classifications and constants
 
-#define SPI_CLOCK_SPEED 8           // SPI transfer speed in MHz
+#define SPI_CLOCK_SPEED 6           // SPI transfer speed in MHz
 #define ACCEL_SENSITIVITY_4G 0.000122
 #define GYRO_SENSITIVITY_500DPS 0.0175
 #define Z_OFFSET_ACC -0.007
 #define Z_OFFSET_GYRO -178
 
+#define SENSOR_DATA_GRAB_REPEATS 10
 
 // Testing and debugging
 #define BLINK_USEC  500000
 
 static bool first_inact = false;
-static const char* TAG = "LED20";
 static bool interrupt_triggered = false;
 static bool active_detect = false;
 static bool inactive_detect = false;
 int8_t read_burst[12];
 int8_t accel_temp_burst[8];
+float accel_results[3];
+
 
 
 // Global LED value 
@@ -133,7 +135,7 @@ void IRAM_ATTR gpio_isr_handler(void* arg);
 void handle_interrupt_task(void* arg);
 void activity_sequence();
 void inactivity_sequence();
-
+void accel_get_modes();
 
 int app_main(void)
 {
@@ -211,8 +213,8 @@ int app_main(void)
 
     ESP_LOGD("SETUP","Initializing interrupt detection for Activity/Inactivity");
     // Set up Inactivity Detection intterupt on INT2
-    w_trans(WAKEUP_DUR, 0x04);       // Set inactivity time 
-    w_trans(WAKEUP_THS, 0x01);       // Set inactivity threshold
+    w_trans(WAKEUP_DUR, 0x08);       // Set inactivity time 
+    w_trans(WAKEUP_THS, 0x04);       // Set inactivity threshold
     w_trans(TAP_CFG0, 0x20);         // Set sleep-change notification
     w_trans(TAP_CFG2, 0xE0);         // Enable interrupt
     w_trans(MD2_CFG, 0x80);          // Route interrupt to INT2
@@ -224,7 +226,7 @@ int app_main(void)
     gpio_config(&int_conf);
     gpio_install_isr_service(0);
     gpio_isr_handler_add(PIN_INT2,gpio_isr_handler, NULL);
-    xTaskCreate(handle_interrupt_task, "handle_interrupt_task", 2048, NULL, 10, NULL);
+    xTaskCreate(handle_interrupt_task, "handle_interrupt_task", 4096, NULL, 10, NULL);
     
     ESP_LOGD("SETUP","Setup complete!");
 
@@ -330,6 +332,10 @@ void r_accel(){
     accel_temp_burst[6] = receive[2]->rx_data[0];
     accel_temp_burst[7] = receive[2]->rx_data[1];
 
+    ESP_LOGD("ACCEL_READ", "Burst Data: %02X %02X %02X %02X %02X %02X %02X %02X",
+    accel_temp_burst[0], accel_temp_burst[1], accel_temp_burst[2], accel_temp_burst[3],
+    accel_temp_burst[4], accel_temp_burst[5], accel_temp_burst[6], accel_temp_burst[7]);
+
     ESP_LOGD("ACCEL_READ", "Transaction complete");
     return;
 }
@@ -397,7 +403,7 @@ void handle_interrupt_task(void* arg) {
         }
         
         // Short delay to yield CPU time
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
 
@@ -405,11 +411,11 @@ void handle_interrupt_task(void* arg) {
 
 void activity_sequence() {
     active_detect = false;
-    ESP_LOGD("ACTIVE", "Active detected");
+    ESP_LOGI("ACTIVE", "Active detected");
     while(!inactive_detect){
         ESP_LOGD("ACTIVE", "In while loop");
         led_w(led_red);
-        vTaskDelay(pdMS_TO_TICKS(1));
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
     return;
 }
@@ -420,12 +426,17 @@ void inactivity_sequence(){
     inactive_detect = false;
     ESP_LOGD("INACTIVE", "Inactive detected");
     led_w(led_off);
-    r_accel();        
+    accel_get_modes();     
     ESP_LOGI("INACTIVE", "Accelerometer values: X %.3f g, Y %.3f g, Z %.3f g",
-    ((int16_t)((accel_temp_burst[1] << 8) | accel_temp_burst[0])) * ACCEL_SENSITIVITY_4G,
-    ((int16_t)((accel_temp_burst[3] << 8) | accel_temp_burst[2])) * ACCEL_SENSITIVITY_4G,
-    ((int16_t)((accel_temp_burst[5] << 8) | accel_temp_burst[4])) * ACCEL_SENSITIVITY_4G);
+    accel_results[0],
+    accel_results[1],
+    accel_results[2]);
+    
+    while (accel_results[0] == 0 || accel_results[1] == 0 || accel_results[2] == 0){
+        accel_get_modes();
+        vTaskDelay(pdMS_TO_TICKS(100));
 
+    }
 
     // Get accel data x3
         // Repeat flag?
@@ -442,3 +453,42 @@ void inactivity_sequence(){
     return;
 }
 
+
+void accel_get_modes() {
+    float x_arr[SENSOR_DATA_GRAB_REPEATS] = {};
+    float y_arr[SENSOR_DATA_GRAB_REPEATS] = {};
+    float z_arr[SENSOR_DATA_GRAB_REPEATS] = {};
+
+    int x_counter = 0, y_counter = 0, z_counter = 0;
+    float x_sum = 0, y_sum = 0, z_sum = 0;
+
+    for (int i = 0; i < SENSOR_DATA_GRAB_REPEATS; i++) {
+        ESP_LOGD("MODES", "Sampling sensor");
+        r_accel();
+
+        // Convert raw data
+        int16_t x_raw = (int16_t)((accel_temp_burst[0]) | (accel_temp_burst[1] << 8));
+        int16_t y_raw = (int16_t)((accel_temp_burst[2]) | (accel_temp_burst[3] << 8));
+        int16_t z_raw = (int16_t)((accel_temp_burst[4]) | (accel_temp_burst[5] << 8));
+
+        x_arr[i] = x_raw * ACCEL_SENSITIVITY_4G;
+        y_arr[i] = y_raw * ACCEL_SENSITIVITY_4G;
+        z_arr[i] = z_raw * ACCEL_SENSITIVITY_4G;
+
+        // Log raw values
+        ESP_LOGD("MODES", "X_RAW: %d, Y_RAW: %d, Z_RAW: %d", x_raw, y_raw, z_raw);
+
+        // Accumulate non-zero values
+        if (fabs(x_arr[i]) > 0.01) { x_sum += x_arr[i]; x_counter++; }
+        if (fabs(y_arr[i]) > 0.01) { y_sum += y_arr[i]; y_counter++; }
+        if (fabs(z_arr[i]) > 0.01) { z_sum += z_arr[i]; z_counter++; }
+
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
+
+    accel_results[0] = (x_counter > 0) ? x_sum / x_counter : 0;
+    accel_results[1] = (y_counter > 0) ? y_sum / y_counter : 0;
+    accel_results[2] = (z_counter > 0) ? z_sum / z_counter : 0;
+
+    ESP_LOGD("MODES", "Averages: X=%.3f g, Y=%.3f g, Z=%.3f g", accel_results[0], accel_results[1], accel_results[2]);
+}
