@@ -69,10 +69,11 @@ static bool first_inact = false;
 static bool interrupt_triggered = false;
 static bool active_detect = false;
 static bool inactive_detect = false;
+volatile bool is_drdy = true;
 int8_t read_burst[12];
 int8_t accel_temp_burst[8];
 float accel_results[3];
-
+TaskHandle_t drdy_task_handle = NULL;
 
 
 // Global LED value 
@@ -132,7 +133,9 @@ void w_trans (uint16_t address, uint16_t data );
 uint8_t r_trans(uint8_t address);
 void led_w(uint8_t *led_data);
 void IRAM_ATTR gpio_isr_handler(void* arg);
-void handle_interrupt_task(void* arg);
+void IRAM_ATTR drdy_isr_handler(void* arg);
+void handle_activity_task(void* arg);
+void handle_drdy_task(void* arg);
 void activity_sequence();
 void inactivity_sequence();
 void accel_get_modes();
@@ -145,7 +148,7 @@ int app_main(void)
     
 
     // ISR setup
-    gpio_config_t int_conf = {
+    gpio_config_t activity_conf = {
         .intr_type = GPIO_INTR_ANYEDGE,
         .mode = GPIO_MODE_INPUT,
         .pin_bit_mask = (1ULL << PIN_INT2),
@@ -153,8 +156,17 @@ int app_main(void)
         .pull_up_en = 1,
     };
 
+    gpio_config_t drdy_conf = {
+        .intr_type = GPIO_INTR_POSEDGE,
+        .mode = GPIO_MODE_INPUT,
+        .pin_bit_mask = (1ULL << PIN_INT1),
+        .pull_down_en = 0,
+        .pull_up_en = 1,
+
+    };
     
-    
+
+
     // Off LED setup
     for (int i = 0; i < LED_NORTH_CHAIN * 3; i++){
         led_off[i]=0;
@@ -211,6 +223,9 @@ int app_main(void)
     w_trans(CTRL7_G, 0x02);     // Enable User offsets for low pass filter
     w_trans(CTRL8_XL, 0x00);    // Set up Low Pass Filter for accel
 
+    // Set up DRDY interrupt detection on INT1
+    w_trans(INT1_CTRL, 0x01); // Accelerometer data-ready interrupt on INT1
+
     ESP_LOGD("SETUP","Initializing interrupt detection for Activity/Inactivity");
     // Set up Inactivity Detection intterupt on INT2
     w_trans(WAKEUP_DUR, 0x08);       // Set inactivity time 
@@ -222,12 +237,19 @@ int app_main(void)
 
     led_w(led_red);
 
+
+    sleep(2);
     ESP_LOGD("SETUP","Activating interrupt handling for Activity/Inactivity interrupts");
-    gpio_config(&int_conf);
+    gpio_config(&activity_conf);
     gpio_install_isr_service(0);
     gpio_isr_handler_add(PIN_INT2,gpio_isr_handler, NULL);
-    xTaskCreate(handle_interrupt_task, "handle_interrupt_task", 4096, NULL, 10, NULL);
+    xTaskCreate(handle_activity_task, "handle_activity_task", 4096, NULL, 10, NULL);
     
+    gpio_config(&drdy_conf);
+    gpio_isr_handler_add(PIN_INT1, drdy_isr_handler, NULL);
+    xTaskCreate(handle_drdy_task, "handle_drdy_task", 4096, NULL, 10, &drdy_task_handle);
+    
+
     ESP_LOGD("SETUP","Setup complete!");
 
     while(1){
@@ -279,6 +301,12 @@ uint8_t r_trans(uint8_t address){
 
 
 void r_accel(){
+
+    if (!is_drdy) {
+        while(!is_drdy);
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+    is_drdy = false;
 
     spi_transaction_t trans[3] = {};
     spi_transaction_t *receive[3] = {};
@@ -358,6 +386,17 @@ void led_w(uint8_t *led_data){
     return;
 }
 
+void IRAM_ATTR drdy_isr_handler(void* arg) {
+    is_drdy = true;
+
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    vTaskNotifyGiveFromISR(drdy_task_handle, &xHigherPriorityTaskWoken);
+    if (xHigherPriorityTaskWoken) {
+        portYIELD_FROM_ISR();
+    }
+}
+
+
 void IRAM_ATTR gpio_isr_handler(void* arg) {
     // Check the level of the GPIO to determine edge
     interrupt_triggered = true;
@@ -379,7 +418,7 @@ void IRAM_ATTR gpio_isr_handler(void* arg) {
     return;
 }
 
-void handle_interrupt_task(void* arg) {
+void handle_activity_task(void* arg) {
     while (1) {
         if (interrupt_triggered) {
             interrupt_triggered = false;  // Clear the flag
@@ -407,7 +446,14 @@ void handle_interrupt_task(void* arg) {
     }
 }
 
+void handle_drdy_task(void* pvParameters) {
+    while (1) {
+        // Wait for the ISR notification
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // Block until notified
 
+        ESP_LOGD("DRDY_ISR", "DRDY interrupt triggered");
+    }
+}
 
 void activity_sequence() {
     active_detect = false;
@@ -432,11 +478,6 @@ void inactivity_sequence(){
     accel_results[1],
     accel_results[2]);
     
-    while (accel_results[0] == 0 || accel_results[1] == 0 || accel_results[2] == 0){
-        accel_get_modes();
-        vTaskDelay(pdMS_TO_TICKS(100));
-
-    }
 
     // Get accel data x3
         // Repeat flag?
@@ -464,6 +505,7 @@ void accel_get_modes() {
 
     for (int i = 0; i < SENSOR_DATA_GRAB_REPEATS; i++) {
         ESP_LOGD("MODES", "Sampling sensor");
+        
         r_accel();
 
         // Convert raw data
@@ -483,7 +525,6 @@ void accel_get_modes() {
         if (fabs(y_arr[i]) > 0.01) { y_sum += y_arr[i]; y_counter++; }
         if (fabs(z_arr[i]) > 0.01) { z_sum += z_arr[i]; z_counter++; }
 
-        vTaskDelay(pdMS_TO_TICKS(5));
     }
 
     accel_results[0] = (x_counter > 0) ? x_sum / x_counter : 0;
