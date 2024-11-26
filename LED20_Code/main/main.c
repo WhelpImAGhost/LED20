@@ -64,9 +64,10 @@
 #define SENSOR_DATA_GRAB_REPEATS 10
 
 // Testing and debugging
-#define BLINK_USEC  500000
+#define BLINK_USEC  1000000
+#define LED_HEARTBEAT 15
 
-static bool first_inact = false;
+bool heartbeat_state = false;
 static bool interrupt_triggered = false;
 static bool active_detect = false;
 static bool inactive_detect = false;
@@ -165,6 +166,14 @@ int app_main(void)
 
     };
     
+    gpio_config_t heartbeat_conf = {
+        .pin_bit_mask = (1ULL << LED_HEARTBEAT), // Pin mask for GPIO15
+        .mode = GPIO_MODE_OUTPUT,                 // Set as output mode
+        .pull_up_en = GPIO_PULLUP_DISABLE,        // Disable pull-up
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,    // Disable pull-down
+        .intr_type = GPIO_INTR_DISABLE            // Disable interrupts
+    };
+    gpio_config(&heartbeat_conf);
 
 
     // Off LED setup
@@ -238,7 +247,6 @@ int app_main(void)
     led_w(led_red);
 
 
-    sleep(2);
     ESP_LOGD("SETUP","Activating interrupt handling for Activity/Inactivity interrupts");
     gpio_config(&activity_conf);
     gpio_install_isr_service(0);
@@ -254,6 +262,14 @@ int app_main(void)
 
     while(1){
 
+        if(heartbeat_state) {
+            gpio_set_level(LED_HEARTBEAT, 1);
+            heartbeat_state = false;
+        }
+        else {
+            gpio_set_level(LED_HEARTBEAT, 0);
+            heartbeat_state = true;
+        }
         usleep(BLINK_USEC);
        
     }
