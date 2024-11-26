@@ -59,6 +59,7 @@
 #define GYRO_SENSITIVITY_500DPS 0.0175
 #define Z_OFFSET_ACC -0.007
 #define Z_OFFSET_GYRO -178
+#define TOLERANCE 0.1
 
 #define SENSOR_DATA_GRAB_REPEATS 10
 
@@ -75,21 +76,17 @@ int8_t accel_temp_burst[8];
 float accel_results[3];
 TaskHandle_t drdy_task_handle = NULL;
 
+const float faces[NUM_FACES][3] = {
+    FACE_1, FACE_2, FACE_3, FACE_4, FACE_5,
+    FACE_6, FACE_7, FACE_8, FACE_9, FACE_10,
+    FACE_11, FACE_12, FACE_13, FACE_14, FACE_15,
+    FACE_16, FACE_17, FACE_18, FACE_19, FACE_20
+};
 
 // Global LED value 
 uint8_t led_red[LED_NORTH_CHAIN * 3];
-
-uint8_t led_purple[15] = {
-    0x00, 0xFF, 0xFF,  // Green (128), Red (0), Blue (0) - Red
-    0x00, 0xFF, 0xFF,  // Green (0), Red (128), Blue (0) - Green
-    0x00, 0xFF, 0xFF,  // Green (0), Red (0), Blue (128) - Blue
-    0x00, 0xFF, 0xFF,  // Green (128), Red (128), Blue (0) - Yellow
-    0x00, 0xFF, 0xFF   // Green (128), Red (0), Blue (128) - Cyan
-
-};
-
 uint8_t led_off[LED_NORTH_CHAIN * 3];
-
+uint8_t led_current[LED_NORTH_CHAIN * 3];
 
 // SPI bus device setup
 spi_device_handle_t accel;              // Set up accel/gyro device 
@@ -139,6 +136,9 @@ void handle_drdy_task(void* arg);
 void activity_sequence();
 void inactivity_sequence();
 void accel_get_modes();
+int get_face();
+int compare_vectors(const float a[3], const float b[3], float tolerance);
+void light_face(int face);
 
 int app_main(void)
 {
@@ -424,14 +424,9 @@ void handle_activity_task(void* arg) {
             interrupt_triggered = false;  // Clear the flag
 
             if(inactive_detect){
-                if (!first_inact){
-                    first_inact = true;
-                    ESP_LOGD("HANDLER", "Ignoring first inactivity");
-                }
-                else {
-                    ESP_LOGD("HANDLER", "Running inactivity sequence");
-                    inactivity_sequence();
-                }
+
+                ESP_LOGD("HANDLER", "Running inactivity sequence");
+                inactivity_sequence();
             }
             else if (active_detect) {
                 ESP_LOGD("HANDLER", "Running activity sequence");
@@ -467,7 +462,7 @@ void activity_sequence() {
 }
 
 void inactivity_sequence(){
-
+    int detected_face = -1;
     
     inactive_detect = false;
     ESP_LOGD("INACTIVE", "Inactive detected");
@@ -478,17 +473,18 @@ void inactivity_sequence(){
     accel_results[1],
     accel_results[2]);
     
+    detected_face = get_face();
+    while (detected_face == -1) {
+        accel_get_modes();
+        detected_face = get_face();
+        vTaskDelay(pdMS_TO_TICKS(10));
 
-    // Get accel data x3
-        // Repeat flag?
-    // average
-    // display LED pattern
-    // Case 1 or 20, with default being LED assignment based off roll
-        // Twinkle the LED?
+    }
+    ESP_LOGI("MODES", "Face gathered: %d", detected_face );
 
-    // Timer/interrupt 20 seconds later to turn off LED
+    light_face(detected_face);
+    
 
-    // TImer/interrupt 2 minutes later for deep sleep
 
 
     return;
@@ -532,4 +528,42 @@ void accel_get_modes() {
     accel_results[2] = (z_counter > 0) ? z_sum / z_counter : 0;
 
     ESP_LOGD("MODES", "Averages: X=%.3f g, Y=%.3f g, Z=%.3f g", accel_results[0], accel_results[1], accel_results[2]);
+
+    
+    
+
+}
+
+int get_face(){
+
+    for (int i = 0; i < NUM_FACES; i++) {
+        if (compare_vectors(accel_results, faces[i], TOLERANCE)) {
+            ESP_LOGD("FACE MATCH", "Match found with FACE_%d\n", i + 1);
+            return i; // Exit after finding the first match
+        }
+    }
+
+    return -1;
+
+}
+
+int compare_vectors(const float a[3], const float b[3], float tolerance) {
+    for (int i = 0; i < 3; i++) {
+        if (fabs(a[i] - b[i]) > tolerance) {
+            return 0; // Not equal
+        }
+    }
+    return 1; // Equal
+}
+
+void light_face(int face){
+
+    memcpy( led_current, led_off, sizeof(led_off));
+
+    led_current[3*face + 1] = 0xFF;
+    led_current[3*face + 2] = 0xFF;
+
+    led_w(led_current);
+
+    return;
 }
