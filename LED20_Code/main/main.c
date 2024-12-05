@@ -30,6 +30,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_sleep.h"
+#include "driver/ledc.h"
 
 
 #include "defines.c"
@@ -42,14 +43,14 @@
 #define PIN_MOSI 18 // MOSI GPIO of host
 #define PIN_SCK 19  // SCK GPIO of host
 #define PIN_CS 17   // CS GPIO of host
-#define PIN_INT1 0  // GPIO Input for interrupt 1
-#define PIN_INT2 1  // GPIO Input for interrupt 2
+#define PIN_INT1 1  // GPIO Input for interrupt 1
+#define PIN_INT2 2  // GPIO Input for interrupt 2
 
 
 // LED Connection and classifications
 
-#define LED_NORTH 23 // LED Data Out pin for North Hemisphere
-#define LED_NORTH_CHAIN 5 // Number of LEDs in North Hemisphere
+#define LED_NORTH 22 // LED Data Out pin for North Hemisphere
+#define LED_NORTH_CHAIN 20 // Number of LEDs in North Hemisphere
 
 
 // Sensor classifications and constants
@@ -63,11 +64,15 @@
 
 #define SENSOR_DATA_GRAB_REPEATS 10
 
+// Piezo speaker setup
+#define PIEZO_PIN 0
+
 // Testing and debugging
-#define BLINK_USEC  1000000
+#define BLINK_USEC  250000
 #define LED_HEARTBEAT 15
 
 bool heartbeat_state = false;
+bool first_inact = false;
 static bool interrupt_triggered = false;
 static bool active_detect = false;
 static bool inactive_detect = false;
@@ -123,7 +128,22 @@ rmt_bytes_encoder_config_t bytes_encoder_config = {
     .flags.msb_first = true, // SK6812MINI typically sends MSB first as well
 };
 
+ledc_timer_config_t piezo_timer = {
+        .speed_mode = LEDC_LOW_SPEED_MODE,   // High-speed mode
+        .timer_num = LEDC_TIMER_0,           // Timer 0
+        .duty_resolution = LEDC_TIMER_10_BIT,// Resolution of PWM duty (0-1023)
+        .freq_hz = 2000,                     // Frequency in Hertz (e.g., 2 kHz for a tone)
+        .clk_cfg = LEDC_AUTO_CLK             // Use the default clock source
+};
 
+ledc_channel_config_t piezo_channel = {
+        .gpio_num = PIEZO_PIN,             // GPIO number for the buzzer
+        .speed_mode = LEDC_LOW_SPEED_MODE,  // High-speed mode
+        .channel = LEDC_CHANNEL_0,           // Use channel 0
+        .timer_sel = LEDC_TIMER_0,           // Select timer 0
+        .duty = 512,                         // Initial duty cycle (50%)
+        .hpoint = 0                          // Hardware timer high point (0 by default)
+};
 
 // Function prototypes
 
@@ -140,6 +160,7 @@ void accel_get_modes();
 int get_face();
 int compare_vectors(const float a[3], const float b[3], float tolerance);
 void light_face(int face);
+void led_test();
 
 int app_main(void)
 {
@@ -153,16 +174,16 @@ int app_main(void)
         .intr_type = GPIO_INTR_ANYEDGE,
         .mode = GPIO_MODE_INPUT,
         .pin_bit_mask = (1ULL << PIN_INT2),
-        .pull_down_en = 0,
-        .pull_up_en = 1,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
     };
 
     gpio_config_t drdy_conf = {
         .intr_type = GPIO_INTR_POSEDGE,
         .mode = GPIO_MODE_INPUT,
         .pin_bit_mask = (1ULL << PIN_INT1),
-        .pull_down_en = 0,
-        .pull_up_en = 1,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
 
     };
     
@@ -175,6 +196,8 @@ int app_main(void)
     };
     gpio_config(&heartbeat_conf);
 
+    
+
 
     // Off LED setup
     for (int i = 0; i < LED_NORTH_CHAIN * 3; i++){
@@ -185,7 +208,7 @@ int app_main(void)
     for (int i = 0; i < LED_NORTH_CHAIN; i++){
 
         led_red[3*i]   = 0x00;
-        led_red[3*i+1] = 0xFF;
+        led_red[3*i+1] = 0x05;
         led_red[3*i+2] = 0x00;
     }
 
@@ -215,6 +238,8 @@ int app_main(void)
     ESP_ERROR_CHECK(spi_bus_add_device(SPI2_HOST, &accel_config ,&accel ));
     ESP_LOGD("SETUP","SPI was set up with no errors");
     
+    vTaskDelay(pdMS_TO_TICKS(50));
+
     uint8_t whoami = r_trans(0x0F);
     ESP_LOGD("WHOAMI", "Value: 0x%02X", whoami);
     if (whoami != 0x6C){
@@ -222,7 +247,8 @@ int app_main(void)
         return -1;
     }
     
-    
+    led_test();
+
     // Reset and intialize sensors
     ESP_LOGD("SETUP","Initializing Accel and Gyro");
     w_trans(CTRL3_C, 0x1);    // Reset the sensor
@@ -238,13 +264,13 @@ int app_main(void)
     ESP_LOGD("SETUP","Initializing interrupt detection for Activity/Inactivity");
     // Set up Inactivity Detection intterupt on INT2
     w_trans(WAKEUP_DUR, 0x08);       // Set inactivity time 
-    w_trans(WAKEUP_THS, 0x04);       // Set inactivity threshold
+    w_trans(WAKEUP_THS, 0x08);       // Set inactivity threshold
     w_trans(TAP_CFG0, 0x20);         // Set sleep-change notification
     w_trans(TAP_CFG2, 0xE0);         // Enable interrupt
     w_trans(MD2_CFG, 0x80);          // Route interrupt to INT2
     w_trans(Z_OFS_ACC, z_offset_acc); // Set the calculated z offset
 
-    led_w(led_red);
+    vTaskDelay(pdMS_TO_TICKS(2000)); // Delay for 2000 ms
 
 
     ESP_LOGD("SETUP","Activating interrupt handling for Activity/Inactivity interrupts");
@@ -259,6 +285,10 @@ int app_main(void)
     
 
     ESP_LOGD("SETUP","Setup complete!");
+    ledc_timer_config(&piezo_timer);
+    ledc_channel_config(&piezo_channel);
+    vTaskDelay(pdMS_TO_TICKS(200)); // Delay for 2000 ms
+    ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0); // Turn off PWM
 
     while(1){
 
@@ -441,8 +471,16 @@ void handle_activity_task(void* arg) {
 
             if(inactive_detect){
 
+
+                inactive_detect = false;
+                ESP_LOGE("HANDLER", "Inactive detected");
+                if (!first_inact){
+                    first_inact = true;
+                    ESP_LOGE("HANDLER", "Ignoring first inactivity");
+                } else {
                 ESP_LOGD("HANDLER", "Running inactivity sequence");
                 inactivity_sequence();
+                }
             }
             else if (active_detect) {
                 ESP_LOGD("HANDLER", "Running activity sequence");
@@ -580,6 +618,37 @@ void light_face(int face){
     led_current[3*face + 2] = 0xFF;
 
     led_w(led_current);
+
+    return;
+}
+
+void led_test(){
+
+    uint8_t led_test[LED_NORTH_CHAIN * 3];
+
+    for (int i = 0; i < LED_NORTH_CHAIN; i++){
+        
+        led_w(led_off);
+        for (int j = 0; j < LED_NORTH_CHAIN; j++){
+
+            if(j == i){
+                led_test[j] = 0x00;
+                led_test[j+1] = 0xFF;
+                led_test[j+2] = 0xFF;
+            }
+            else{
+                led_test[j] = 0x00;
+                led_test[j+1] = 0x00;
+                led_test[j+2] = 0x00;
+            }
+
+        }
+
+        led_w(led_test);
+        vTaskDelay(pdMS_TO_TICKS(200)); // Delay for 2000 ms
+
+
+    }
 
     return;
 }
