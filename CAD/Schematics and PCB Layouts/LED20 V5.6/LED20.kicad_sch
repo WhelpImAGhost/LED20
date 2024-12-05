@@ -6,8 +6,8 @@
 	(paper "A4")
 	(title_block
 		(title "LED20 Final Schematic")
-		(date "2024-11-21")
-		(rev "5")
+		(date "2024-12-05")
+		(rev "5.6")
 		(company "Team 01")
 		(comment 1 "Schematic of LED20")
 	)
@@ -3416,8 +3416,16 @@
 		(uuid "47bcc554-ed18-4c01-968c-6d0bb09b60fa")
 	)
 	(no_connect
+		(at 74.93 172.72)
+		(uuid "52de71e7-ef2f-4d00-afda-779b4e741791")
+	)
+	(no_connect
 		(at 86.36 152.4)
 		(uuid "6255105e-a560-45e5-b659-4510f7857f5e")
+	)
+	(no_connect
+		(at 74.93 177.8)
+		(uuid "7c23d4e8-bfd1-42f7-86fd-cf575cb8a4e0")
 	)
 	(no_connect
 		(at 59.69 76.2)
@@ -4540,7 +4548,7 @@
 		)
 		(uuid "ef20042d-e691-404a-9c1a-cf6fd583039c")
 	)
-	(text "x10"
+	(text "x20"
 		(exclude_from_sim no)
 		(at 222.758 38.354 0)
 		(effects

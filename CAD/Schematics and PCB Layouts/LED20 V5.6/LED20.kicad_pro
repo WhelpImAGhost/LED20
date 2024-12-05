@@ -592,7 +592,7 @@
     },
     "net_format_name": "",
     "page_layout_descr_file": "",
-    "plot_directory": "../PDFs/Schematic/Final Schematic 11-21-24/",
+    "plot_directory": "../PDFs/Schematic/Final Schematic 12-5-24/",
     "spice_current_sheet_as_root": false,
     "spice_external_command": "spice \"%I\"",
     "spice_model_current_sheet_as_root": true,
