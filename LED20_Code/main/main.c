@@ -31,6 +31,7 @@
 #include "freertos/task.h"
 #include "esp_sleep.h"
 #include "driver/ledc.h"
+#include "esp_timer.h"
 
 
 #include "defines.c"
@@ -70,6 +71,7 @@
 // Testing and debugging
 #define BLINK_USEC  250000
 #define LED_HEARTBEAT 15
+#define TIMER_DUR 40
 
 bool heartbeat_state = false;
 bool first_inact = false;
@@ -81,6 +83,7 @@ int8_t read_burst[12];
 int8_t accel_temp_burst[8];
 float accel_results[3];
 TaskHandle_t drdy_task_handle = NULL;
+static esp_timer_handle_t timer_handle = NULL;
 
 const float faces[NUM_FACES][3] = {
     FACE_1, FACE_2, FACE_3, FACE_4, FACE_5,
@@ -88,6 +91,9 @@ const float faces[NUM_FACES][3] = {
     FACE_11, FACE_12, FACE_13, FACE_14, FACE_15,
     FACE_16, FACE_17, FACE_18, FACE_19, FACE_20
 };
+
+// Put LED order here
+const int led_order[20] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19};
 
 // Global LED value 
 uint8_t led_red[LED_NORTH_CHAIN * 3];
@@ -163,13 +169,18 @@ int get_face();
 int compare_vectors(const float a[3], const float b[3], float tolerance);
 void light_face(int face);
 void led_test();
+void play_tune(int (*tune)[2], int num_notes);
+void initialize_timer();
+void timer_sleep(void *arg);
+void stop_timer();
+void restart_timer(uint64_t interval_us);
+void roll_1();
+void roll_20();
 
 int app_main(void)
 {
     // Local variable declarations
     int8_t z_offset_acc = (int8_t)(Z_OFFSET_ACC * USR_OFFSET_FACTOR+0.5);
-
-    
 
     // ISR setup
     gpio_config_t activity_conf = {
@@ -281,7 +292,7 @@ int app_main(void)
     ESP_LOGD("SETUP","Initializing interrupt detection for Activity/Inactivity");
     // Set up Inactivity Detection intterupt on INT2
     w_trans(WAKEUP_DUR, 0x08);       // Set inactivity time 
-    w_trans(WAKEUP_THS, 0x01);       // Set inactivity threshold
+    w_trans(WAKEUP_THS, 0x08);       // Set inactivity threshold
     w_trans(TAP_CFG0, 0x20);         // Set sleep-change notification
     w_trans(TAP_CFG2, 0xE0);         // Enable interrupt
     w_trans(MD2_CFG, 0x80);          // Route interrupt to INT2
@@ -289,8 +300,9 @@ int app_main(void)
 
 
 
-    //led_w(led_blue);
-    //vTaskDelay(pdMS_TO_TICKS(2000)); // Delay for 2000 ms
+    led_w(led_blue);
+    //vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for 2000 ms
+    initialize_timer();
 
     ESP_LOGD("SETUP","Activating interrupt handling for Activity/Inactivity interrupts");
     gpio_config(&activity_conf);
@@ -304,21 +316,15 @@ int app_main(void)
     
     
     ESP_LOGD("SETUP","Setup complete!");
-    //ledc_timer_config(&piezo_timer);
-    //ledc_channel_config(&piezo_channel);
-    //vTaskDelay(pdMS_TO_TICKS(100)); // Delay for 100 ms
-    //ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0); // Turn off PWM 
-    /*led_test();
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 512); // Set duty cycle (e.g., 50%)
-    ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);   // Apply the duty cycle    
-    vTaskDelay(pdMS_TO_TICKS(100)); // Delay for 100 ms
-    ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0); // Turn off PWM
-    vTaskDelay(pdMS_TO_TICKS(50)); // Delay for 50 ms
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 512); // Set duty cycle (e.g., 50%)
-    ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);   // Apply the duty cycle    
-    vTaskDelay(pdMS_TO_TICKS(100)); // Delay for 100 ms
-    ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0); // Turn off PWM
-    */
+    ledc_timer_config(&piezo_timer);
+    ledc_channel_config(&piezo_channel);
+    vTaskDelay(pdMS_TO_TICKS(50)); // Delay for 100 ms
+    ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0); // Turn off PWM 
+    //led_test();
+    
+    //play_tune(tune, 9);
+
+    
     while(1){
 
         if(heartbeat_state) {
@@ -502,10 +508,10 @@ void handle_activity_task(void* arg) {
 
 
                 inactive_detect = false;
-                first_inact = true;
+                
                 ESP_LOGI("HANDLER", "Inactive detected");
                 if (!first_inact){
-                    
+                    first_inact = true;
                     ESP_LOGI("HANDLER", "Ignoring first inactivity");
                 } else {
                 ESP_LOGD("HANDLER", "Running inactivity sequence");
@@ -547,7 +553,8 @@ void activity_sequence() {
 
 void inactivity_sequence(){
     int detected_face = -1;
-    
+    stop_timer();
+    restart_timer(TIMER_DUR * 1000000);
     inactive_detect = false;
     ESP_LOGD("INACTIVE", "Inactive detected");
     led_w(led_off);
@@ -567,9 +574,12 @@ void inactivity_sequence(){
     
     ESP_LOGE("MODES", "Face gathered: %d", detected_face + 1);
 
-    light_face(detected_face);
-    
+    if (detected_face == 0) roll_1();
+    else if (detected_face == 19) roll_20();
 
+    light_face(detected_face);
+
+    
 
 
     return;
@@ -671,10 +681,177 @@ void led_test(){
         
 
         led_w(led_test);
-        vTaskDelay(pdMS_TO_TICKS(200)); // Delay for 200 ms
+        vTaskDelay(pdMS_TO_TICKS(100)); 
 
 
     }
 
+    led_w(led_blue);
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    led_w(led_green);
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    led_w(led_red);
+    vTaskDelay(pdMS_TO_TICKS(1000));
+
     return;
+}
+
+void play_tune(int (*tune)[2], int num_notes) {
+    
+    // Play each note in the tune
+    for (int i = 0; i < num_notes; i++) {
+        int frequency = tune[i][0]; // Frequency in Hz
+        int duration = tune[i][1];  // Duration in milliseconds
+
+        // Set the frequency for the current note
+        ledc_set_freq(LEDC_LOW_SPEED_MODE, LEDC_TIMER_0, frequency);
+        ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 512); // Set duty cycle to 50%
+        ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);   // Apply duty cycle
+
+        // Play the note for the specified duration
+        vTaskDelay(pdMS_TO_TICKS(duration));
+
+        // Pause between notes
+        ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0); // Turn off the buzzer
+        ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
+        vTaskDelay(pdMS_TO_TICKS(100)); // Short pause between notes
+    }
+
+    // Stop the buzzer after the tune
+    ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0); // Turn off PWM and set output low
+}
+
+
+void initialize_timer()
+{
+    // Define the timer configuration
+    const esp_timer_create_args_t timer_config = {
+        .callback = &timer_sleep,  // Callback function
+        .arg = NULL,               // Argument passed to the callback (optional)
+        .name = "one_shot_timer"   // Timer name (useful for debugging)
+    };
+
+
+    // Create the timer
+    esp_err_t ret = esp_timer_create(&timer_config, &timer_handle);
+    if (ret != ESP_OK) {
+        ESP_LOGE("TIMER", "Failed to create timer: %s", esp_err_to_name(ret));
+        return;
+    }
+
+    // Start the timer (2 minutes = 120,000,000 microseconds)
+    ret = esp_timer_start_once(timer_handle, 120 * 1000000); // Timer interval in microseconds (20s)
+    if (ret != ESP_OK) {
+        ESP_LOGE("TIMER", "Failed to start timer: %s", esp_err_to_name(ret));
+        esp_timer_delete(timer_handle); // Clean up in case of failure
+        return;
+    }
+
+    ESP_LOGI("TIMER", "Timer initialized to go off in 2 minutes.");
+}
+
+void timer_sleep(void *arg)
+{
+    ESP_LOGE("TIMER", "Timer expired! Calling timer_sleep() function.");
+    led_w(led_off);
+    esp_deep_sleep_start();
+}
+
+void stop_timer()
+{
+    if (timer_handle) {
+        esp_err_t ret = esp_timer_stop(timer_handle);
+        if (ret == ESP_OK) {
+            ESP_LOGE("STOP TIMER", "Timer stopped successfully.");
+        } else if (ret == ESP_ERR_INVALID_STATE) {
+            ESP_LOGE("STOP TIMER", "Timer was not running.");
+        } else {
+            ESP_LOGE("STOP TIMER", "Failed to stop timer: %s", esp_err_to_name(ret));
+        }
+    } else {
+        ESP_LOGE("STOP TIMER", "Timer handle is NULL. Timer might not be initialized.");
+    }
+}
+
+void restart_timer(uint64_t interval_us)
+{
+    if (timer_handle) {
+        esp_err_t ret = esp_timer_start_once(timer_handle, interval_us);
+        if (ret == ESP_OK) {
+            ESP_LOGE("RESET TIMER", "Timer restarted successfully with interval %llu microseconds.", interval_us);
+        } else if (ret == ESP_ERR_INVALID_STATE) {
+            ESP_LOGE("RESET TIMER", "Timer is already running. Stop it before restarting.");
+        } else {
+            ESP_LOGE("RESET TIMER", "Failed to restart timer: %s", esp_err_to_name(ret));
+        }
+    } else {
+        ESP_LOGE("RESET TIMER", "Timer handle is NULL. Timer might not be initialized.");
+    }
+}
+
+void roll_1(){
+
+    int tune[11][2] = {
+    {NOTE_D4, 500},
+    {NOTE_D4, 375},
+    {NOTE_D4, 125}, 
+    {NOTE_D4, 500},  
+    {NOTE_F4, 250},  
+    {NOTE_E4, 250},
+    {NOTE_E4, 375},
+    {NOTE_D4, 125}, 
+    {NOTE_D4, 375}, 
+    {NOTE_CS4,125}, 
+    {NOTE_D4, 1000}, 
+    };
+    ESP_LOGE("NAT1", "You rolled a 1");
+    led_w(led_red);
+    vTaskDelay(pdMS_TO_TICKS(500)); 
+    led_w(led_off);
+    vTaskDelay(pdMS_TO_TICKS(100));
+    led_w(led_red);
+    vTaskDelay(pdMS_TO_TICKS(500)); 
+    led_w(led_off);
+    vTaskDelay(pdMS_TO_TICKS(100));
+    led_w(led_red);
+    vTaskDelay(pdMS_TO_TICKS(500)); 
+    led_w(led_off);
+    vTaskDelay(pdMS_TO_TICKS(100));
+    play_tune(tune,11);
+    return; 
+
+}
+
+void roll_20(){
+
+    int tune[9][2] = {
+    {NOTE_B4, 83},
+    {NOTE_B4, 83},
+    {NOTE_B4, 83}, 
+    {NOTE_B4, 250},  
+    {NOTE_G4, 250},  
+    {NOTE_A4, 250},
+    {NOTE_B4, 166},
+    {NOTE_A4, 83}, 
+    {NOTE_B4, 500 }, 
+    };
+    ESP_LOGE("NAT20", "You rolled a 20");
+    led_w(led_green);
+    vTaskDelay(pdMS_TO_TICKS(500)); 
+    led_w(led_off);
+    vTaskDelay(pdMS_TO_TICKS(100));
+    led_w(led_green);
+    vTaskDelay(pdMS_TO_TICKS(500)); 
+    led_w(led_off);
+    vTaskDelay(pdMS_TO_TICKS(100));
+    led_w(led_green);
+    vTaskDelay(pdMS_TO_TICKS(500)); 
+    led_w(led_off);
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    play_tune(tune,9);
+    return; 
+
+
+
 }
