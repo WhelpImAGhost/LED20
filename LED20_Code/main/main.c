@@ -91,6 +91,8 @@ const float faces[NUM_FACES][3] = {
 
 // Global LED value 
 uint8_t led_red[LED_NORTH_CHAIN * 3];
+uint8_t led_green[LED_NORTH_CHAIN * 3];
+uint8_t led_blue[LED_NORTH_CHAIN * 3];
 uint8_t led_off[LED_NORTH_CHAIN * 3];
 uint8_t led_current[LED_NORTH_CHAIN * 3];
 
@@ -208,8 +210,24 @@ int app_main(void)
     for (int i = 0; i < LED_NORTH_CHAIN; i++){
 
         led_red[3*i]   = 0x00;
-        led_red[3*i+1] = 0x05;
+        led_red[3*i+1] = 0xF;
         led_red[3*i+2] = 0x00;
+    }
+
+    // Green LED setup
+    for (int i = 0; i < LED_NORTH_CHAIN; i++){
+
+        led_green[3*i]   = 0xF;
+        led_green[3*i+1] = 0x00;
+        led_green[3*i+2] = 0x00;
+    }
+
+    // Blue LED setup
+    for (int i = 0; i < LED_NORTH_CHAIN; i++){
+
+        led_blue[3*i]   = 0x00;
+        led_blue[3*i+1] = 0x00;
+        led_blue[3*i+2] = 0xF;
     }
 
     // LED RMT setup
@@ -247,7 +265,6 @@ int app_main(void)
         return -1;
     }
     
-    led_test();
 
     // Reset and intialize sensors
     ESP_LOGD("SETUP","Initializing Accel and Gyro");
@@ -264,14 +281,16 @@ int app_main(void)
     ESP_LOGD("SETUP","Initializing interrupt detection for Activity/Inactivity");
     // Set up Inactivity Detection intterupt on INT2
     w_trans(WAKEUP_DUR, 0x08);       // Set inactivity time 
-    w_trans(WAKEUP_THS, 0x08);       // Set inactivity threshold
+    w_trans(WAKEUP_THS, 0x01);       // Set inactivity threshold
     w_trans(TAP_CFG0, 0x20);         // Set sleep-change notification
     w_trans(TAP_CFG2, 0xE0);         // Enable interrupt
     w_trans(MD2_CFG, 0x80);          // Route interrupt to INT2
     w_trans(Z_OFS_ACC, z_offset_acc); // Set the calculated z offset
 
-    vTaskDelay(pdMS_TO_TICKS(2000)); // Delay for 2000 ms
 
+
+    //led_w(led_blue);
+    //vTaskDelay(pdMS_TO_TICKS(2000)); // Delay for 2000 ms
 
     ESP_LOGD("SETUP","Activating interrupt handling for Activity/Inactivity interrupts");
     gpio_config(&activity_conf);
@@ -283,13 +302,23 @@ int app_main(void)
     gpio_isr_handler_add(PIN_INT1, drdy_isr_handler, NULL);
     xTaskCreate(handle_drdy_task, "handle_drdy_task", 4096, NULL, 10, &drdy_task_handle);
     
-
+    
     ESP_LOGD("SETUP","Setup complete!");
-    ledc_timer_config(&piezo_timer);
-    ledc_channel_config(&piezo_channel);
-    vTaskDelay(pdMS_TO_TICKS(200)); // Delay for 2000 ms
+    //ledc_timer_config(&piezo_timer);
+    //ledc_channel_config(&piezo_channel);
+    //vTaskDelay(pdMS_TO_TICKS(100)); // Delay for 100 ms
+    //ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0); // Turn off PWM 
+    /*led_test();
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 512); // Set duty cycle (e.g., 50%)
+    ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);   // Apply the duty cycle    
+    vTaskDelay(pdMS_TO_TICKS(100)); // Delay for 100 ms
     ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0); // Turn off PWM
-
+    vTaskDelay(pdMS_TO_TICKS(50)); // Delay for 50 ms
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 512); // Set duty cycle (e.g., 50%)
+    ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);   // Apply the duty cycle    
+    vTaskDelay(pdMS_TO_TICKS(100)); // Delay for 100 ms
+    ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0); // Turn off PWM
+    */
     while(1){
 
         if(heartbeat_state) {
@@ -473,10 +502,11 @@ void handle_activity_task(void* arg) {
 
 
                 inactive_detect = false;
-                ESP_LOGE("HANDLER", "Inactive detected");
+                first_inact = true;
+                ESP_LOGI("HANDLER", "Inactive detected");
                 if (!first_inact){
-                    first_inact = true;
-                    ESP_LOGE("HANDLER", "Ignoring first inactivity");
+                    
+                    ESP_LOGI("HANDLER", "Ignoring first inactivity");
                 } else {
                 ESP_LOGD("HANDLER", "Running inactivity sequence");
                 inactivity_sequence();
@@ -509,7 +539,7 @@ void activity_sequence() {
     ESP_LOGI("ACTIVE", "Active detected");
     while(!inactive_detect){
         ESP_LOGD("ACTIVE", "In while loop");
-        led_w(led_red);
+        led_w(led_blue);
         vTaskDelay(pdMS_TO_TICKS(100));
     }
     return;
@@ -522,19 +552,20 @@ void inactivity_sequence(){
     ESP_LOGD("INACTIVE", "Inactive detected");
     led_w(led_off);
     accel_get_modes();     
-    ESP_LOGI("INACTIVE", "Accelerometer values: X %.3f g, Y %.3f g, Z %.3f g",
+    ESP_LOGE("INACTIVE", "Accelerometer values: X %.3f g, Y %.3f g, Z %.3f g",
     accel_results[0],
     accel_results[1],
     accel_results[2]);
     
     detected_face = get_face();
-    while (detected_face == -1) {
+   while (detected_face == -1) {
         accel_get_modes();
         detected_face = get_face();
         vTaskDelay(pdMS_TO_TICKS(10));
 
     }
-    ESP_LOGI("MODES", "Face gathered: %d", detected_face );
+    
+    ESP_LOGE("MODES", "Face gathered: %d", detected_face + 1);
 
     light_face(detected_face);
     
@@ -614,8 +645,8 @@ void light_face(int face){
 
     memcpy( led_current, led_off, sizeof(led_off));
 
-    led_current[3*face + 1] = 0xFF;
-    led_current[3*face + 2] = 0xFF;
+
+    led_current[3*face + 2] = 0x01;
 
     led_w(led_current);
 
@@ -624,28 +655,23 @@ void light_face(int face){
 
 void led_test(){
 
-    uint8_t led_test[LED_NORTH_CHAIN * 3];
+    uint8_t led_test[LED_NORTH_CHAIN * 3] = {0};
 
     for (int i = 0; i < LED_NORTH_CHAIN; i++){
         
         led_w(led_off);
-        for (int j = 0; j < LED_NORTH_CHAIN; j++){
+        vTaskDelay(pdMS_TO_TICKS(2)); // Delay for 200 ms
+        memcpy( led_test, led_off, sizeof(led_off));
+        
 
-            if(j == i){
-                led_test[j] = 0x00;
-                led_test[j+1] = 0xFF;
-                led_test[j+2] = 0xFF;
-            }
-            else{
-                led_test[j] = 0x00;
-                led_test[j+1] = 0x00;
-                led_test[j+2] = 0x00;
-            }
+        led_test[3*i] = 0x00;
+        led_test[3*i+1] = 0x00;
+        led_test[3*i+2] = 0x0F;
 
-        }
+        
 
         led_w(led_test);
-        vTaskDelay(pdMS_TO_TICKS(200)); // Delay for 2000 ms
+        vTaskDelay(pdMS_TO_TICKS(200)); // Delay for 200 ms
 
 
     }

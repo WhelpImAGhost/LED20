@@ -71,23 +71,23 @@
 // Die face accel values
 // Order: X, Y, Z
 // Value range: -1 to 1 g
-#define FACE_1  {0, 0, 1}
-#define FACE_2  {0, 1, 0}
-#define FACE_3  {1, 0, 0}
-#define FACE_4  {0, 0, -1}
-#define FACE_5  {0, -1, 0}
-#define FACE_6  {-1, 0, 0}
-#define FACE_7  {19, 20, 21}
-#define FACE_8  {22, 23, 24}
-#define FACE_9  {25, 26, 27}
-#define FACE_10 {28, 29, 30}
-#define FACE_11 {31, 32, 33}
-#define FACE_12 {34, 35, 36}
-#define FACE_13 {37, 38, 39}
-#define FACE_14 {40, 41, 42}
-#define FACE_15 {43, 44, 45}
-#define FACE_16 {46, 47, 48}
-#define FACE_17 {49, 50, 51}
-#define FACE_18 {52, 53, 54}
-#define FACE_19 {55, 56, 57}
-#define FACE_20 {58, 59, 60}
+#define FACE_1  { 0.000, -1.000,  0.000}
+#define FACE_2  {-0.240,  0.340, -0.720}
+#define FACE_3  { 0.200,  0.260,  0.430}
+#define FACE_4  { 0.000, -0.700, -0.600}
+#define FACE_5  {-0.930,  0.000,  0.000}
+#define FACE_6  { 0.800,  0.000, -0.100}
+#define FACE_7  {-0.300,  0.234,  0.800}
+#define FACE_8  { 0.200,  0.780, -0.330}
+#define FACE_9  { 0.600, -0.660, -0.280}
+#define FACE_10 { 0.220,  0.300, -0.200}
+#define FACE_11 {-0.250,  0.000,  0.900}
+#define FACE_12 {-0.590,  0.590, -0.245}
+#define FACE_13 {-0.150, -0.600,  0.400}
+#define FACE_14 { 0.450, -0.300, -0.400}
+#define FACE_15 {-0.520,  0.300,  0.200}
+#define FACE_16 { 0.800,  0.300,  0.000}
+#define FACE_17 { 0.000,  0.620,  0.560}
+#define FACE_18 {-0.350, -0.300, -0.350}
+#define FACE_19 { 0.440, -0.010,  0.840}
+#define FACE_20 { 0.000,  1.000,  0.000}
