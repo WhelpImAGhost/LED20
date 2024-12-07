@@ -61,7 +61,7 @@
 #define GYRO_SENSITIVITY_500DPS 0.0175
 #define Z_OFFSET_ACC -0.007
 #define Z_OFFSET_GYRO -178
-#define TOLERANCE 0.1
+#define TOLERANCE 0.2
 
 #define SENSOR_DATA_GRAB_REPEATS 10
 
@@ -91,9 +91,10 @@ const float faces[NUM_FACES][3] = {
     FACE_11, FACE_12, FACE_13, FACE_14, FACE_15,
     FACE_16, FACE_17, FACE_18, FACE_19, FACE_20
 };
+                        // 20  8 10  2 12 15  7 17  3 16  6 14  4 18  5 13 11 19  9  1
+// Put LED order here,      1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20
+const int led_order[20] = {19, 3, 8,12,14,10, 6, 1,18, 2,16, 4,15,11, 5, 9, 7,13,17,0};
 
-// Put LED order here
-const int led_order[20] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19};
 
 // Global LED value 
 uint8_t led_red[LED_NORTH_CHAIN * 3];
@@ -292,7 +293,7 @@ int app_main(void)
     ESP_LOGD("SETUP","Initializing interrupt detection for Activity/Inactivity");
     // Set up Inactivity Detection intterupt on INT2
     w_trans(WAKEUP_DUR, 0x08);       // Set inactivity time 
-    w_trans(WAKEUP_THS, 0x08);       // Set inactivity threshold
+    w_trans(WAKEUP_THS, 0x10);       // Set inactivity threshold
     w_trans(TAP_CFG0, 0x20);         // Set sleep-change notification
     w_trans(TAP_CFG2, 0xE0);         // Enable interrupt
     w_trans(MD2_CFG, 0x80);          // Route interrupt to INT2
@@ -300,8 +301,9 @@ int app_main(void)
 
 
 
-    led_w(led_blue);
-    //vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for 2000 ms
+    led_w(led_green);
+    vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for 2000 ms
+    led_w(led_off);
     initialize_timer();
 
     ESP_LOGD("SETUP","Activating interrupt handling for Activity/Inactivity interrupts");
@@ -565,12 +567,12 @@ void inactivity_sequence(){
     accel_results[2]);
     
     detected_face = get_face();
-   while (detected_face == -1) {
+    while (detected_face == -1) {
         accel_get_modes();
         detected_face = get_face();
         vTaskDelay(pdMS_TO_TICKS(10));
 
-    }
+    } 
     
     ESP_LOGE("MODES", "Face gathered: %d", detected_face + 1);
 
@@ -578,7 +580,7 @@ void inactivity_sequence(){
     else if (detected_face == 19) roll_20();
 
     light_face(detected_face);
-
+    vTaskDelay(pdMS_TO_TICKS(100));
     
 
 
@@ -656,7 +658,8 @@ void light_face(int face){
     memcpy( led_current, led_off, sizeof(led_off));
 
 
-    led_current[3*face + 2] = 0x01;
+    led_current[3*(led_order[face]) + 1] = 0xFF;
+    led_current[3*(led_order[face]) + 2] = 0xFF;
 
     led_w(led_current);
 

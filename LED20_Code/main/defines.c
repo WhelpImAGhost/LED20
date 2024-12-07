@@ -71,26 +71,26 @@
 // Die face accel values
 // Order: X, Y, Z
 // Value range: -1 to 1 g
-#define FACE_1  { 0.000, -1.000,  0.000}
-#define FACE_2  {-0.240,  0.340, -0.720}
-#define FACE_3  { 0.200,  0.260,  0.430}
-#define FACE_4  { 0.000, -0.700, -0.600}
-#define FACE_5  {-0.930,  0.000,  0.000}
-#define FACE_6  { 0.800,  0.000, -0.100}
-#define FACE_7  {-0.300,  0.234,  0.800}
-#define FACE_8  { 0.200,  0.780, -0.330}
-#define FACE_9  { 0.600, -0.660, -0.280}
-#define FACE_10 { 0.220,  0.300, -0.200}
-#define FACE_11 {-0.250,  0.000,  0.900}
-#define FACE_12 {-0.590,  0.590, -0.245}
-#define FACE_13 {-0.150, -0.600,  0.400}
-#define FACE_14 { 0.450, -0.300, -0.400}
-#define FACE_15 {-0.520,  0.300,  0.200}
-#define FACE_16 { 0.800,  0.300,  0.000}
-#define FACE_17 { 0.000,  0.620,  0.560}
-#define FACE_18 {-0.350, -0.300, -0.350}
-#define FACE_19 { 0.440, -0.010,  0.840}
-#define FACE_20 { 0.000,  1.000,  0.000}
+#define FACE_1  { 0.040, -0.773,  0.065} //
+#define FACE_2  {-0.300,  0.200, -0.900} //
+#define FACE_3  { 0.530,  0.250,  0.150} //
+#define FACE_4  { 0.000, -0.775, -0.500} //
+#define FACE_5  {-0.903, -0.330, -0.155} //
+#define FACE_6  { 0.950, -0.145, -0.050} //
+#define FACE_7  {-0.620,  0.200,  0.400} //
+#define FACE_8  { 0.560,  0.500, -0.340} //
+#define FACE_9  { 0.600, -0.600,  0.200} // 
+#define FACE_10 { 0.070,  0.170, -0.870} //
+#define FACE_11 {-0.200, -0.250,  0.880} //
+#define FACE_12 {-0.590,  0.550, -0.400} //
+#define FACE_13 {-0.550, -0.740,  0.345} //
+#define FACE_14 { 0.625, -0.340, -0.680} //  
+#define FACE_15 {-0.900,  0.350,  0.000} 
+#define FACE_16 { 0.912,  0.250,  0.160} //
+#define FACE_17 {-0.050,  0.350,  0.630} // 
+#define FACE_18 {-0.522,  0.000, -0.750} //
+#define FACE_19 { 0.000, -0.200,  0.910} //
+#define FACE_20 { 0.000,  0.900,  0.000} //
 
 // Noise notes
 #define NOTE_A4  440
