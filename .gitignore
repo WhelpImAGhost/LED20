@@ -62,3 +62,5 @@ dkms.conf
 /LED20_Code/main/build
 /build
 LED20_Code/main/CMakeLists.txt
+.DS_Store
+*/.DS_Store
