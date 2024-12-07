@@ -50,8 +50,8 @@
 		(allow_soldermask_bridges_in_footprints no)
 		(grid_origin 180.6375 59.95)
 		(pcbplotparams
-			(layerselection 0x00310fc_ffffffff)
-			(plot_on_all_layers_selection 0x0000000_00000000)
+			(layerselection 0x0000002_7ffffffe)
+			(plot_on_all_layers_selection 0x7fcffef_80000001)
 			(disableapertmacros no)
 			(usegerberextensions no)
 			(usegerberattributes yes)
@@ -60,7 +60,7 @@
 			(dashed_line_dash_ratio 12.000000)
 			(dashed_line_gap_ratio 3.000000)
 			(svgprecision 4)
-			(plotframeref no)
+			(plotframeref yes)
 			(viasonmask no)
 			(mode 1)
 			(useauxorigin no)
@@ -80,11 +80,11 @@
 			(plotinvisibletext no)
 			(sketchpadsonfab no)
 			(subtractmaskfromsilk no)
-			(outputformat 1)
+			(outputformat 4)
 			(mirror no)
 			(drillshape 0)
 			(scaleselection 1)
-			(outputdirectory "build/")
+			(outputdirectory "../PDFs/PCB/Final PCB Layout/")
 		)
 	)
 	(net 0 "")
@@ -5298,7 +5298,7 @@
 		(descr "Capacitor SMD 0603 (1608 Metric), square (rectangular) end terminal, IPC_7351 nominal, (Body size source: IPC-SM-782 page 76, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "capacitor")
 		(property "Reference" "C5"
-			(at -1.868965 -0.27908 360)
+			(at -1.868965 -0.27908 0)
 			(layer "B.SilkS")
 			(uuid "7f423912-105c-4052-9d90-c44b33e191ab")
 			(effects
@@ -6926,7 +6926,7 @@
 		(descr "Capacitor SMD 0603 (1608 Metric), square (rectangular) end terminal, IPC_7351 nominal, (Body size source: IPC-SM-782 page 76, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "capacitor")
 		(property "Reference" "C4"
-			(at -0.082591 1.13467 360)
+			(at -0.082591 1.13467 0)
 			(layer "B.SilkS")
 			(uuid "855e71b9-2964-4565-85ae-8762e24b38e4")
 			(effects
@@ -7098,7 +7098,7 @@
 			(uuid "a4307941-1229-4470-99ef-7778f955d34c")
 		)
 		(fp_text user "${REFERENCE}"
-			(at 0 0 360)
+			(at 0 0 0)
 			(layer "B.Fab")
 			(uuid "22e7c220-11db-47a1-b58c-29d7ce0c3bf3")
 			(effects
