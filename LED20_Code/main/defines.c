@@ -11,9 +11,11 @@
 #include <stdlib.h>
 
 #define FUNC_CFG_ACCESS 0x01
+#define INT1_CTRL 0x0D
 #define CTRL1_XL 0x10
 #define CTRL2_G 0x11
 #define CTRL3_C 0x12
+#define CTRL4_C 0x13
 #define CTRL6_C 0x15
 #define CTRL7_G 0x16
 #define CTRL8_XL 0x17
@@ -39,12 +41,6 @@
 
 // Data storage registers
 #define GYRO_X_LOW 0x22
-
-/*  The rest of these do not need to be defined, 
-    as incremental register reading takes care
-    of reading all 12 addresses.
-
-
 #define GYRO_X_HGIH 0x23
 #define GYRO_Y_LOW 0x24
 #define GYRO_Y_HIGH 0x25
@@ -57,7 +53,7 @@
 #define ACCEL_Y_HIGH 0x2B
 #define ACCEL_Z_LOW 0x2C
 #define ACCEL_Z_HIGH 0x2D
-*/
+
 
 #define TEMP_LOW 0x20
 #define TEMP_HIGH 0x21
@@ -70,27 +66,39 @@
 #define T1H 6   // 0.6 µs high for "1" bit
 #define T1L 6   // 0.6 µs low for "1" bit
 
+#define NUM_FACES 20
 
 // Die face accel values
 // Order: X, Y, Z
-// Value range: 0 to 1 g
-#define FACE_1  [int16_t]{1, 2, 3}
-#define FACE_2  [int16_t]{4, 5, 6}
-#define FACE_3  [int16_t]{7, 8, 9}
-#define FACE_4  [int16_t]{10, 11, 12}
-#define FACE_5  [int16_t]{13, 14, 15}
-#define FACE_6  [int16_t]{16, 17, 18}
-#define FACE_7  [int16_t]{19, 20, 21}
-#define FACE_8  [int16_t]{22, 23, 24}
-#define FACE_9  [int16_t]{25, 26, 27}
-#define FACE_10 [int16_t]{28, 29, 30}
-#define FACE_11 [int16_t]{31, 32, 33}
-#define FACE_12 [int16_t]{34, 35, 36}
-#define FACE_13 [int16_t]{37, 38, 39}
-#define FACE_14 [int16_t]{40, 41, 42}
-#define FACE_15 [int16_t]{43, 44, 45}
-#define FACE_16 [int16_t]{46, 47, 48}
-#define FACE_17 [int16_t]{49, 50, 51}
-#define FACE_18 [int16_t]{52, 53, 54}
-#define FACE_19 [int16_t]{55, 56, 57}
-#define FACE_20 [int16_t]{58, 59, 60}
+// Value range: -1 to 1 g
+#define FACE_1  { 0.040, -0.773,  0.065} //
+#define FACE_2  {-0.300,  0.200, -0.900} //
+#define FACE_3  { 0.530,  0.250,  0.150} //
+#define FACE_4  { 0.000, -0.775, -0.500} //
+#define FACE_5  {-0.903, -0.330, -0.155} //
+#define FACE_6  { 0.950, -0.145, -0.050} //
+#define FACE_7  {-0.620,  0.200,  0.400} //
+#define FACE_8  { 0.560,  0.500, -0.340} //
+#define FACE_9  { 0.600, -0.600,  0.200} // 
+#define FACE_10 { 0.070,  0.170, -0.870} //
+#define FACE_11 {-0.200, -0.250,  0.880} //
+#define FACE_12 {-0.590,  0.550, -0.400} //
+#define FACE_13 {-0.550, -0.740,  0.345} //
+#define FACE_14 { 0.625, -0.340, -0.680} //  
+#define FACE_15 {-0.900,  0.350,  0.000} 
+#define FACE_16 { 0.912,  0.250,  0.160} //
+#define FACE_17 {-0.050,  0.350,  0.630} // 
+#define FACE_18 {-0.522,  0.000, -0.750} //
+#define FACE_19 { 0.000, -0.200,  0.910} //
+#define FACE_20 { 0.000,  0.900,  0.000} //
+
+// Noise notes
+#define NOTE_A4  440
+#define NOTE_B4  493
+#define NOTE_C4  262
+#define NOTE_CS4 277
+#define NOTE_D4  294
+#define NOTE_E4  330
+#define NOTE_F4  349
+#define NOTE_G4  392
+#define NOTE_REST 0
