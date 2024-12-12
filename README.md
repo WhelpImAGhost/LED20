@@ -22,7 +22,7 @@ This repository holds all design and development documents that were either assi
 - [Functional Decomposition](./Functional%20Decomposition/): Other high-detail files which explain the inner hardware and software functions and connections
 - [Bill of Materials](./BOMs/Bill%20of%20Materials%20v4.xlsx): The list of required components to recreate the circuit
 - [3D Model Files](./CAD/3D%20Model/): Iterations of development for the 3D printed D20 enclosure and charging base
-- [PCB Development Files](./CAD/Schematics%20and%20PCB%20Layouts/): Requierd files for modifying or fabricating the carrier circuit board
+- [PCB Development Files](./CAD/Schematics%20and%20PCB%20Layouts/): Required files for modifying or fabricating the carrier circuit board
 - [Code](./LED20_Code/): Most recent iteration of the code, developed using ESP-IDF for the ESP32-C6
 
 
